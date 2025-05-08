@@ -1,0 +1,56 @@
+{
+    "calibration_sets": {
+        "5条血条_05071620": {
+            "count": 5,
+            "calibration_time": "2025-05-08 16:41:56",
+            "health_bars": [
+                {
+                    "x1": 875,
+                    "y1": 351,
+                    "x2": 1047,
+                    "y2": 422,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "汐灵汐"
+                },
+                {
+                    "x1": 873,
+                    "y1": 425,
+                    "x2": 1048,
+                    "y2": 497,
+                    "recognition_done": true,
+                    "name": "鬼王宗弟子",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 873,
+                    "y1": 501,
+                    "x2": 1047,
+                    "y2": 570,
+                    "recognition_done": true,
+                    "name": "合欢派弟子",
+                    "profession": "月合欢"
+                },
+                {
+                    "x1": 874,
+                    "y1": 574,
+                    "x2": 1047,
+                    "y2": 641,
+                    "recognition_done": true,
+                    "name": "焚香谷弟子",
+                    "profession": "炎焚香"
+                },
+                {
+                    "x1": 876,
+                    "y1": 646,
+                    "x2": 1046,
+                    "y2": 712,
+                    "recognition_done": true,
+                    "name": "青云门弟子",
+                    "profession": "雷青云"
+                }
+            ]
+        }
+    },
+    "last_used": "5条血条_05071620"
+}
