@@ -3,8 +3,6 @@
         "enabled": true,
         "health_threshold": 80.0,
         "cooldown_time": 1.5,
-        "priority_roles": [
-            "罡鬼王"
-        ]
+        "priority_roles": []
     }
 }

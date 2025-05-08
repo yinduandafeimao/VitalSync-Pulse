@@ -2,7 +2,7 @@
     "calibration_sets": {
         "5条血条_05071620": {
             "count": 5,
-            "calibration_time": "2025-05-08 16:41:56",
+            "calibration_time": "2025-05-07 17:11:26",
             "health_bars": [
                 {
                     "x1": 875,
@@ -20,7 +20,7 @@
                     "y2": 497,
                     "recognition_done": true,
                     "name": "鬼王宗弟子",
-                    "profession": "罡鬼王"
+                    "profession": "未知"
                 },
                 {
                     "x1": 873,
@@ -29,7 +29,7 @@
                     "y2": 570,
                     "recognition_done": true,
                     "name": "合欢派弟子",
-                    "profession": "月合欢"
+                    "profession": "未知"
                 },
                 {
                     "x1": 874,
@@ -38,7 +38,7 @@
                     "y2": 641,
                     "recognition_done": true,
                     "name": "焚香谷弟子",
-                    "profession": "炎焚香"
+                    "profession": "未知"
                 },
                 {
                     "x1": 876,
@@ -47,7 +47,7 @@
                     "y2": 712,
                     "recognition_done": true,
                     "name": "青云门弟子",
-                    "profession": "雷青云"
+                    "profession": "未知"
                 }
             ]
         }

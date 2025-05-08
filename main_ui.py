@@ -9,19 +9,9 @@ from PySide6.QtWidgets import (
     QFileDialog, QDialog, QGridLayout, QSlider, QSpinBox, QLineEdit,
     QCheckBox, QDoubleSpinBox, QListWidget, QListWidgetItem, QMessageBox, QColorDialog  # 添加所需控件
 )
-from PySide6.QtCore import Qt, QTimer, QByteArray, QBuffer, QIODevice, QPoint, QSize
-from PySide6.QtGui import QPixmap, QImage, QIcon, QMouseEvent
+from PySide6.QtCore import Qt, QTimer, QByteArray, QBuffer, QIODevice
+from PySide6.QtGui import QPixmap, QImage, QIcon
 import numpy as np
-try:
-    import qtawesome as qta  # 尝试导入qtawesome用于图标
-except ImportError:
-    # 如果没有安装qtawesome，提供一个空的替代接口
-    class QtaReplacement:
-        def icon(self, *args, **kwargs):
-            return QIcon()
-    
-    qta = QtaReplacement()
-
 # 动态导入带空格的模块
 module_name = "team_members(choice box)"
 module_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "team_members(choice box).py")
@@ -42,82 +32,16 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 设置窗口标题和大小
-        self.setWindowTitle('VitalSync Pulse')
-        self.setGeometry(100, 100, 960, 700)
-        
-        # 设置无边框窗口和透明背景
-        self.setWindowFlag(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        
-        # 设置背景样式
-        # 使用渐变背景替代图片背景，更现代的设计
-        self.setStyleSheet("""
-            QMainWindow {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
-                    stop:0 #E0F7FA, stop:0.5 #B3E5FC, stop:1 #81D4FA);
-                border-radius: 20px;
-                border: 1px solid rgba(255, 255, 255, 150);
-            }
-        """)
-        
-        # 定义通用样式
-        self.frame_style = """
-            QFrame {
-                background: rgba(255, 255, 255, 0.8);
-                border-radius: 15px;
-                padding: 10px;
-                border: 1px solid rgba(52, 152, 219, 0.3);
-            }
-        """
-        
-        self.title_style = """
-            QLabel {
-                font-weight: bold; 
-                font-size: 14px; 
-                color: #2C3E50;
-                margin-bottom: 5px;
-            }
-        """
-        
-        # 窗口拖动功能
-        self._drag_pos = None
+        self.setWindowTitle('诛仙世界血条监控')
+        self.setGeometry(100, 100, 800, 600)
         
         # 创建中央部件和主布局
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        
-        # 创建自定义标题栏
-        self.create_title_bar(main_layout)
         
         # 创建标签页控件
         self.tab_widget = QTabWidget()
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                background: rgba(255, 255, 255, 0.9);
-                border-radius: 15px;
-                border: none;
-            }
-            QTabBar::tab {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #2C3E50, stop:1 #3498DB);
-                color: white;
-                padding: 8px 12px;
-                margin-right: 4px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-            }
-            QTabBar::tab:selected {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #1A5276, stop:1 #2980B9);
-                font-weight: bold;
-            }
-            QTabBar::tab:hover:!selected {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #34495E, stop:1 #5DADE2);
-            }
-        """)
         main_layout.addWidget(self.tab_widget)
         
         # 创建队伍对象
@@ -142,14 +66,6 @@ class MainWindow(QMainWindow):
             self.result_label = QLabel('准备就绪')
             self.result_label.setWordWrap(True)  # 允许文本自动换行
             self.result_label.setMinimumHeight(100)
-            self.result_label.setStyleSheet("""
-                QLabel {
-                    background: rgba(255, 255, 255, 0.8);
-                    border-radius: 10px;
-                    padding: 10px;
-                    color: #2C3E50;
-                }
-            """)
             main_layout.addWidget(self.result_label)
         
         # 尝试加载已存在的队友配置
@@ -158,166 +74,6 @@ class MainWindow(QMainWindow):
         # 在__init__方法中调用职业图标加载
         self.profession_icons = {}  # 用于存储职业图标
         self.load_profession_icons()
-        
-        # 设置整体样式
-        self.setStyleSheet("""
-            QMainWindow {
-                background: transparent;
-            }
-            QWidget {
-                font-family: "微软雅黑", Arial, sans-serif;
-                font-size: 13px;
-            }
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #2C3E50, stop:1 #3498DB);
-                color: white;
-                padding: 8px 12px;
-                border-radius: 8px;
-                border: none;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #34495E, stop:1 #5DADE2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #1A5276, stop:1 #2980B9);
-            }
-            QFrame {
-                background: rgba(255, 255, 255, 0.8);
-                border-radius: 15px;
-                padding: 5px;
-            }
-            QLabel {
-                color: #2C3E50;
-            }
-            QSpinBox, QDoubleSpinBox, QLineEdit {
-                border-radius: 5px;
-                padding: 5px;
-                border: 1px solid #BDC3C7;
-            }
-            QCheckBox {
-                color: #2C3E50;
-            }
-            QSlider::groove:horizontal {
-                height: 8px;
-                background: #D6EAF8;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #3498DB;
-                border: 1px solid #2C3E50;
-                width: 18px;
-                margin: -5px 0;
-                border-radius: 9px;
-            }
-        """)
-    
-    def create_title_bar(self, main_layout):
-        """创建自定义标题栏"""
-        title_bar = QWidget()
-        title_bar.setFixedHeight(50)
-        title_bar.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #2C3E50, stop:1 #3498DB);
-                border-radius: 15px;
-            }
-        """)
-        
-        title_layout = QHBoxLayout(title_bar)
-        title_layout.setContentsMargins(10, 0, 10, 0)
-        
-        # 添加标题和图标
-        title_label = QLabel("VitalSync Pulse")
-        title_label.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-size: 18px;
-                font-weight: bold;
-            }
-        """)
-        
-        # 添加窗口控制按钮
-        btn_min = QPushButton("", self)
-        btn_min.setIcon(qta.icon('fa5s.window-minimize', color='white'))
-        btn_max = QPushButton("", self)
-        btn_max.setIcon(qta.icon('fa5s.window-maximize', color='white'))
-        btn_close = QPushButton("", self)
-        btn_close.setIcon(qta.icon('fa5s.times', color='white'))
-        
-        # 设置按钮样式
-        control_btn_style = """
-            QPushButton {
-                background: transparent;
-                border: none;
-                width: 30px;
-                height: 30px;
-                border-radius: 15px;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-        """
-        
-        btn_close_style = """
-            QPushButton {
-                background: transparent;
-                border: none;
-                width: 30px;
-                height: 30px;
-                border-radius: 15px;
-            }
-            QPushButton:hover {
-                background: rgba(255, 0, 0, 0.5);
-            }
-        """
-        
-        btn_min.setStyleSheet(control_btn_style)
-        btn_max.setStyleSheet(control_btn_style)
-        btn_close.setStyleSheet(btn_close_style)
-        
-        # 连接按钮信号
-        btn_min.clicked.connect(self.showMinimized)
-        btn_max.clicked.connect(self.toggle_maximize)
-        btn_close.clicked.connect(self.close)
-        
-        # 设置工具提示
-        btn_min.setToolTip("最小化")
-        btn_max.setToolTip("最大化")
-        btn_close.setToolTip("关闭")
-        
-        # 添加各元素到标题栏布局
-        title_layout.addWidget(title_label)
-        title_layout.addStretch()  # 弹性空间
-        title_layout.addWidget(btn_min)
-        title_layout.addWidget(btn_max)
-        title_layout.addWidget(btn_close)
-        
-        # 将标题栏添加到主布局
-        main_layout.addWidget(title_bar)
-    
-    def toggle_maximize(self):
-        if self.isMaximized():
-            self.showNormal()
-        else:
-            self.showMaximized()
-    
-    # 窗口拖动事件处理
-    def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-    
-    def mouseMoveEvent(self, event: QMouseEvent):
-        if event.buttons() == Qt.LeftButton and self._drag_pos:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-    
-    def mouseReleaseEvent(self, event: QMouseEvent):
-        self._drag_pos = None
-        event.accept()
     
     def create_tabs(self):
         """创建不同功能的标签页"""
@@ -328,32 +84,24 @@ class MainWindow(QMainWindow):
         # 创建血条监控标签页
         monitoring_tab = self.create_monitoring_tab()
         self.tab_widget.addTab(monitoring_tab, '血条监控')
-        
-        # 创建设置与控制标签页
-        settings_tab = self.create_settings_tab()
-        self.tab_widget.addTab(settings_tab, '设置与控制')
     
     def create_recognition_tab(self):
         """创建队员识别配置标签页"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setSpacing(10)
         
         # 添加职业图标管理区域
         icon_group = QFrame()
         icon_group.setFrameStyle(QFrame.StyledPanel)
-        icon_group.setStyleSheet(self.frame_style)
         icon_layout = QVBoxLayout(icon_group)
         
         icon_title = QLabel('职业图标管理')
-        icon_title.setStyleSheet(self.title_style)
+        icon_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         icon_layout.addWidget(icon_title)
         
         icon_buttons = QHBoxLayout()
         add_icon_btn = QPushButton('添加职业图标')
-        add_icon_btn.setIcon(qta.icon('fa5s.plus-circle', color='white'))
         view_icons_btn = QPushButton('查看已有图标')
-        view_icons_btn.setIcon(qta.icon('fa5s.eye', color='white'))
         icon_buttons.addWidget(add_icon_btn)
         icon_buttons.addWidget(view_icons_btn)
         icon_layout.addLayout(icon_buttons)
@@ -367,11 +115,10 @@ class MainWindow(QMainWindow):
         # 添加队员识别区域
         recognition_group = QFrame()
         recognition_group.setFrameStyle(QFrame.StyledPanel)
-        recognition_group.setStyleSheet(self.frame_style)
         recognition_layout = QVBoxLayout(recognition_group)
         
         recognition_title = QLabel('队员识别')
-        recognition_title.setStyleSheet(self.title_style)
+        recognition_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         recognition_layout.addWidget(recognition_title)
         
         # 添加图像质量设置区域
@@ -413,83 +160,38 @@ class MainWindow(QMainWindow):
         
         recognition_buttons = QHBoxLayout()
         select_area_btn = QPushButton('选择识别区域')
-        select_area_btn.setIcon(qta.icon('fa5s.crop', color='white'))
         start_recognition_btn = QPushButton('开始识别')
-        start_recognition_btn.setIcon(qta.icon('fa5s.play', color='white'))
         load_config_btn = QPushButton('加载队友配置')
-        load_config_btn.setIcon(qta.icon('fa5s.file-import', color='white'))
-        auto_recognize_btn = QPushButton('一键识别队友')
-        auto_recognize_btn.setIcon(qta.icon('fa5s.sliders-h', color='white'))
-        auto_recognize_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #8E44AD, stop:1 #9B59B6);
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #9B59B6, stop:1 #A569BD);
-            }
-        """)
         recognition_buttons.addWidget(select_area_btn)
         recognition_buttons.addWidget(start_recognition_btn)
         recognition_buttons.addWidget(load_config_btn)
-        recognition_buttons.addWidget(auto_recognize_btn)
         recognition_layout.addLayout(recognition_buttons)
         
         # 连接按钮信号
         select_area_btn.clicked.connect(self.select_recognition_area)
         start_recognition_btn.clicked.connect(self.start_recognition)
         load_config_btn.clicked.connect(self.load_teammate_configs)
-        auto_recognize_btn.clicked.connect(self.open_calibration_tool)
         
         layout.addWidget(recognition_group)
         
         # 添加识别结果显示区域
         results_group = QFrame()
         results_group.setFrameStyle(QFrame.StyledPanel)
-        results_group.setStyleSheet(self.frame_style)
         results_layout = QVBoxLayout(results_group)
         
         results_title = QLabel('识别结果')
-        results_title.setStyleSheet(self.title_style)
+        results_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         results_layout.addWidget(results_title)
         
         # 创建滚动区域来显示识别结果
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #D6EAF8;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #3498DB;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout(scroll_widget)
         
         # 添加结果显示标签
         self.result_label = QLabel('等待操作...')
         self.result_label.setWordWrap(True)
-        self.result_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                background: transparent;
-            }
-        """)
         scroll_layout.addWidget(self.result_label)
         
         scroll_area.setWidget(scroll_widget)
@@ -497,59 +199,42 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(results_group)
         
+        # 添加血条校准按钮
+        calibration_btn = QPushButton("血条位置校准")
+        calibration_btn.clicked.connect(self.open_calibration_tool)
+        layout.addWidget(calibration_btn)
+        
         return tab
     
     def create_monitoring_tab(self):
         """创建血条监控标签页"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setSpacing(10)
         
         # 添加队员管理区域
         member_group = QFrame()
         member_group.setFrameStyle(QFrame.StyledPanel)
-        member_group.setStyleSheet(self.frame_style)
         member_layout = QVBoxLayout(member_group)
         
         member_title = QLabel('队员管理')
-        member_title.setStyleSheet(self.title_style)
+        member_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         member_layout.addWidget(member_title)
         
         member_buttons = QHBoxLayout()
         add_member_btn = QPushButton('添加队员')
-        add_member_btn.setIcon(qta.icon('fa5s.user-plus', color='white'))
         remove_member_btn = QPushButton('移除队员')
-        remove_member_btn.setIcon(qta.icon('fa5s.user-minus', color='white'))
         
         # 添加"一键移除全部队友"按钮
         remove_all_btn = QPushButton('一键移除全部队友')
-        remove_all_btn.setIcon(qta.icon('fa5s.users-slash', color='white'))
-        remove_all_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #E74C3C, stop:1 #C0392B);
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #C0392B, stop:1 #CD6155);
-            }
-        """)
+        remove_all_btn.setIcon(QIcon("icons/delete_all.png"))
+        remove_all_btn.setStyleSheet("background-color: #ffdddd;")
         remove_all_btn.setToolTip("一次性移除所有队友")
         remove_all_btn.clicked.connect(self.remove_all_teammates)
         
         # 添加"批量设置血条颜色"按钮
         set_all_colors_btn = QPushButton('批量设置血条颜色')
-        set_all_colors_btn.setIcon(qta.icon('fa5s.palette', color='white'))
-        set_all_colors_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #3498DB, stop:1 #2980B9);
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #2980B9, stop:1 #2E86C1);
-            }
-        """)
+        set_all_colors_btn.setIcon(QIcon("icons/color.png"))
+        set_all_colors_btn.setStyleSheet("background-color: #e6f7ff;")  # 浅蓝色背景
         set_all_colors_btn.setToolTip("一次性为所有队友设置相同的血条颜色范围")
         set_all_colors_btn.clicked.connect(self.set_all_health_bar_colors)
         
@@ -568,18 +253,15 @@ class MainWindow(QMainWindow):
         # 添加血条设置区域
         health_group = QFrame()
         health_group.setFrameStyle(QFrame.StyledPanel)
-        health_group.setStyleSheet(self.frame_style)
         health_layout = QVBoxLayout(health_group)
         
         health_title = QLabel('血条设置')
-        health_title.setStyleSheet(self.title_style)
+        health_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         health_layout.addWidget(health_title)
         
         health_buttons = QHBoxLayout()
         set_position_btn = QPushButton('设置血条位置')
-        set_position_btn.setIcon(qta.icon('fa5s.arrows-alt', color='white'))
         set_color_btn = QPushButton('设置血条颜色')
-        set_color_btn.setIcon(qta.icon('fa5s.fill-drip', color='white'))
         health_buttons.addWidget(set_position_btn)
         health_buttons.addWidget(set_color_btn)
         health_layout.addLayout(health_buttons)
@@ -590,84 +272,18 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(health_group)
         
-        # 添加监控结果显示区域
-        monitor_results_group = QFrame()
-        monitor_results_group.setFrameStyle(QFrame.StyledPanel)
-        monitor_results_group.setStyleSheet(self.frame_style)
-        monitor_results_layout = QVBoxLayout(monitor_results_group)
-        
-        monitor_results_title = QLabel('监控结果')
-        monitor_results_title.setStyleSheet(self.title_style)
-        monitor_results_layout.addWidget(monitor_results_title)
-        
-        # 创建滚动区域来显示监控结果
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #D6EAF8;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #3498DB;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        
-        # 添加监控结果显示标签
-        self.monitor_result_label = QLabel('等待开始监控...')
-        self.monitor_result_label.setWordWrap(True)
-        self.monitor_result_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                background: transparent;
-            }
-        """)
-        scroll_layout.addWidget(self.monitor_result_label)
-        
-        scroll_area.setWidget(scroll_widget)
-        monitor_results_layout.addWidget(scroll_area)
-        
-        # 连接监控信号
-        self.health_monitor.signals.update_signal.connect(self.update_monitor_results)
-        self.health_monitor.signals.status_signal.connect(self.update_monitor_status)
-        
-        layout.addWidget(monitor_results_group)
-        
-        return tab
-    
-    def create_settings_tab(self):
-        """创建设置与控制标签页"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        layout.setSpacing(10)
-        
         # 添加快捷键设置区域
         hotkey_group = QFrame()
         hotkey_group.setFrameStyle(QFrame.StyledPanel)
-        hotkey_group.setStyleSheet(self.frame_style)
         hotkey_layout = QVBoxLayout(hotkey_group)
         
         hotkey_title = QLabel('快捷键设置')
-        hotkey_title.setStyleSheet(self.title_style)
+        hotkey_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         hotkey_layout.addWidget(hotkey_title)
         
         # 添加说明文本
         hotkey_info = QLabel('设置全局快捷键用于开始和停止监控。按下"记录"按钮后，再按下想要设置的快捷键。')
         hotkey_info.setWordWrap(True)
-        hotkey_info.setStyleSheet('color: #7F8C8D;')
         hotkey_layout.addWidget(hotkey_info)
         
         # 开始监控快捷键设置
@@ -677,7 +293,6 @@ class MainWindow(QMainWindow):
         self.start_hotkey_edit.setReadOnly(True)
         self.start_hotkey_edit.setText(self.health_monitor.start_monitoring_hotkey)
         start_hotkey_record_btn = QPushButton('记录')
-        start_hotkey_record_btn.setIcon(qta.icon('fa5s.keyboard', color='white'))
         start_hotkey_layout.addWidget(start_hotkey_label)
         start_hotkey_layout.addWidget(self.start_hotkey_edit)
         start_hotkey_layout.addWidget(start_hotkey_record_btn)
@@ -690,7 +305,6 @@ class MainWindow(QMainWindow):
         self.stop_hotkey_edit.setReadOnly(True)
         self.stop_hotkey_edit.setText(self.health_monitor.stop_monitoring_hotkey)
         stop_hotkey_record_btn = QPushButton('记录')
-        stop_hotkey_record_btn.setIcon(qta.icon('fa5s.keyboard', color='white'))
         stop_hotkey_layout.addWidget(stop_hotkey_label)
         stop_hotkey_layout.addWidget(self.stop_hotkey_edit)
         stop_hotkey_layout.addWidget(stop_hotkey_record_btn)
@@ -698,7 +312,6 @@ class MainWindow(QMainWindow):
         
         # 保存快捷键设置按钮
         save_hotkeys_btn = QPushButton('保存快捷键设置')
-        save_hotkeys_btn.setIcon(qta.icon('fa5s.save', color='white'))
         hotkey_layout.addWidget(save_hotkeys_btn)
         
         # 连接快捷键设置按钮信号
@@ -711,38 +324,16 @@ class MainWindow(QMainWindow):
         # 添加自动选择设置区域
         auto_select_group = QFrame()
         auto_select_group.setFrameStyle(QFrame.StyledPanel)
-        auto_select_group.setStyleSheet(self.frame_style)
         auto_select_layout = QVBoxLayout(auto_select_group)
         
         auto_select_title = QLabel('自动选择设置')
-        auto_select_title.setStyleSheet(self.title_style)
+        auto_select_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         auto_select_layout.addWidget(auto_select_title)
         
         # 启用/禁用复选框
         enable_layout = QHBoxLayout()
         self.auto_select_checkbox = QCheckBox('启用自动选择低血量队友')
         self.auto_select_checkbox.setChecked(self.health_monitor.auto_select_enabled)
-        self.auto_select_checkbox.setStyleSheet("""
-            QCheckBox {
-                color: #2C3E50;
-                font-weight: bold;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #3498DB;
-                border-radius: 3px;
-                background-color: #FFFFFF;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #3498DB;
-                border-radius: 3px;
-                background-color: #3498DB;
-                image: url("resources/images/check.png");
-            }
-        """)
         enable_layout.addWidget(self.auto_select_checkbox)
         auto_select_layout.addLayout(enable_layout)
         
@@ -778,24 +369,6 @@ class MainWindow(QMainWindow):
         
         self.priority_list = QListWidget()
         self.priority_list.setMaximumHeight(100)
-        self.priority_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #BDC3C7;
-                border-radius: 5px;
-                padding: 5px;
-            }
-            QListWidget::item {
-                padding: 5px;
-                border-radius: 3px;
-            }
-            QListWidget::item:selected {
-                background-color: #D6EAF8;
-                color: #2C3E50;
-            }
-            QListWidget::item:hover {
-                background-color: #EBF5FB;
-            }
-        """)
         
         # 获取所有职业类型
         professions = set()
@@ -813,7 +386,6 @@ class MainWindow(QMainWindow):
         
         # 添加保存按钮
         save_auto_select_btn = QPushButton('保存自动选择设置')
-        save_auto_select_btn.setIcon(qta.icon('fa5s.save', color='white'))
         auto_select_layout.addWidget(save_auto_select_btn)
         
         # 连接信号
@@ -824,73 +396,53 @@ class MainWindow(QMainWindow):
         # 添加监控控制区域
         control_group = QFrame()
         control_group.setFrameStyle(QFrame.StyledPanel)
-        control_group.setStyleSheet(self.frame_style)
         control_layout = QVBoxLayout(control_group)
         
         control_title = QLabel('监控控制')
-        control_title.setStyleSheet(self.title_style)
+        control_title.setStyleSheet('font-weight: bold; font-size: 14px;')
         control_layout.addWidget(control_title)
-        
-        # 添加控制面板显示区域
-        control_info = QLabel('控制面板用于开始或停止血条监控功能。您也可以使用设置的快捷键进行快速操作。')
-        control_info.setWordWrap(True)
-        control_info.setStyleSheet('color: #7F8C8D;')
-        control_layout.addWidget(control_info)
         
         control_buttons = QHBoxLayout()
         start_monitor_btn = QPushButton('开始监控')
-        start_monitor_btn.setIcon(qta.icon('fa5s.play-circle', color='white'))
-        start_monitor_btn.setMinimumHeight(50)  # 增加按钮高度
-        start_monitor_btn.setIconSize(QSize(24, 24))  # 增加图标大小
-        start_monitor_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #2ECC71, stop:1 #27AE60);
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #27AE60, stop:1 #2ECC71);
-            }
-        """)
-        
         stop_monitor_btn = QPushButton('停止监控')
-        stop_monitor_btn.setIcon(qta.icon('fa5s.stop-circle', color='white'))
-        stop_monitor_btn.setMinimumHeight(50)  # 增加按钮高度
-        stop_monitor_btn.setIconSize(QSize(24, 24))  # 增加图标大小
-        stop_monitor_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #E74C3C, stop:1 #C0392B);
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x1:1, y1:0, 
-                    stop:0 #C0392B, stop:1 #E74C3C);
-            }
-        """)
-        
         control_buttons.addWidget(start_monitor_btn)
         control_buttons.addWidget(stop_monitor_btn)
         control_layout.addLayout(control_buttons)
         
-        # 添加状态指示区域
-        status_layout = QHBoxLayout()
-        status_label = QLabel('当前状态:')
-        self.monitor_status_label = QLabel('未启动')
-        self.monitor_status_label.setStyleSheet('font-weight: bold; color: #95A5A6;')
-        status_layout.addWidget(status_label)
-        status_layout.addWidget(self.monitor_status_label)
-        status_layout.addStretch()
-        control_layout.addLayout(status_layout)
-        
         # 连接监控控制按钮信号
-        start_monitor_btn.clicked.connect(self.start_monitoring_from_settings)
-        stop_monitor_btn.clicked.connect(self.stop_monitoring_from_settings)
+        start_monitor_btn.clicked.connect(self.start_monitoring)
+        stop_monitor_btn.clicked.connect(self.stop_monitoring)
         
         layout.addWidget(control_group)
+        
+        # 添加监控结果显示区域
+        monitor_results_group = QFrame()
+        monitor_results_group.setFrameStyle(QFrame.StyledPanel)
+        monitor_results_layout = QVBoxLayout(monitor_results_group)
+        
+        monitor_results_title = QLabel('监控结果')
+        monitor_results_title.setStyleSheet('font-weight: bold; font-size: 14px;')
+        monitor_results_layout.addWidget(monitor_results_title)
+        
+        # 创建滚动区域来显示监控结果
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # 添加监控结果显示标签
+        self.monitor_result_label = QLabel('等待开始监控...')
+        self.monitor_result_label.setWordWrap(True)
+        scroll_layout.addWidget(self.monitor_result_label)
+        
+        scroll_area.setWidget(scroll_widget)
+        monitor_results_layout.addWidget(scroll_area)
+        
+        # 连接监控信号
+        self.health_monitor.signals.update_signal.connect(self.update_monitor_results)
+        self.health_monitor.signals.status_signal.connect(self.update_monitor_status)
+        
+        layout.addWidget(monitor_results_group)
         
         return tab
 
@@ -1176,20 +728,7 @@ class MainWindow(QMainWindow):
             self.monitor_result_label.setText("未检测到队友或未启动监控")
             return
         
-        result_text = "<html><body style='font-family: 微软雅黑, Arial, sans-serif;'>"
-        
-        # 添加状态摘要
-        low_hp_count = sum(1 for _, health, is_alive in health_data if health <= 30 and is_alive)
-        total_alive = sum(1 for _, _, is_alive in health_data if is_alive)
-        
-        if low_hp_count > 0:
-            result_text += f"<div style='background: rgba(231, 76, 60, 0.2); padding: 10px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #E74C3C;'>"
-            result_text += f"<span style='color: #E74C3C; font-weight: bold;'>警告：</span> {low_hp_count} 名队友血量低于30%！</div>"
-        
-        result_text += f"<div style='margin-bottom: 15px; background: rgba(52, 152, 219, 0.1); padding: 10px; border-radius: 10px; text-align: center;'>"
-        result_text += f"<span style='font-size: 14px;'>存活队友：<b>{total_alive}/{len(health_data)}</b></span></div>"
-        
-        # 创建队友状态卡片
+        result_text = "<html><body>"
         for name, health, is_alive in health_data:
             # 查找队友对象获取职业信息
             profession = "未知"
@@ -1198,33 +737,15 @@ class MainWindow(QMainWindow):
                     profession = member.profession
                     break
             
-            # 设置血量颜色和背景
-            if not is_alive:
-                card_bg = "rgba(189, 195, 199, 0.2)"  # 灰色背景 - 阵亡
-                health_color = "#95A5A6"
-                status_color = "#95A5A6"
-                status_text = "阵亡"
-                border_color = "#95A5A6"
-            elif health <= 30:
-                card_bg = "rgba(231, 76, 60, 0.1)"  # 红色透明背景 - 危险
-                health_color = "#E74C3C"
-                status_color = "#E74C3C"
-                status_text = "危险"
-                border_color = "#E74C3C"
+            # 设置血量颜色
+            if health <= 30:
+                color = "red"
             elif health <= 70:
-                card_bg = "rgba(243, 156, 18, 0.1)"  # 橙色透明背景 - 警告
-                health_color = "#F39C12"
-                status_color = "#F39C12"
-                status_text = "警告"
-                border_color = "#F39C12"
+                color = "orange"
             else:
-                card_bg = "rgba(46, 204, 113, 0.1)"  # 绿色透明背景 - 安全
-                health_color = "#2ECC71"
-                status_color = "#2ECC71"
-                status_text = "安全"
-                border_color = "#2ECC71"
+                color = "green"
             
-            # 添加职业图标
+            # 添加职业图标和血量信息
             icon_html = ""
             if profession in self.profession_icons:
                 # 将图标转换为base64编码以在HTML中显示
@@ -1235,46 +756,20 @@ class MainWindow(QMainWindow):
                     buffer.open(QIODevice.WriteOnly)
                     pixmap.scaled(24, 24).save(buffer, 'PNG')
                     icon_data = ba.toBase64().data().decode()
-                    icon_html = f'<img src="data:image/png;base64,{icon_data}" width="24" height="24" style="vertical-align:middle;margin-right:8px;"/>'
+                    icon_html = f'<img src="data:image/png;base64,{icon_data}" width="24" height="24" style="vertical-align:middle;margin-right:5px"/>'
             
-            # 创建血量条
-            health_bar_width = 100  # 血量条总宽度
-            current_health_width = int(health * health_bar_width / 100)  # 当前血量宽度
+            status = "存活" if is_alive else "阵亡"
+            status_color = "green" if is_alive else "gray"
             
-            # 构建队友状态卡片
-            result_text += f"""
-            <div style='background: {card_bg}; padding: 12px; border-radius: 10px; margin-bottom: 12px; border-left: 4px solid {border_color}; box-shadow: 0 2px 5px rgba(0,0,0,0.05);'>
-                <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
-                    <div>
-                        {icon_html}<span style='font-weight: bold; font-size: 14px;'>{name}</span> 
-                        <span style='color: #7F8C8D; font-size: 12px;'>({profession})</span>
-                    </div>
-                    <div style='color: {status_color}; font-weight: bold; background: rgba(255,255,255,0.5); padding: 2px 8px; border-radius: 10px; font-size: 12px;'>{status_text}</div>
-                </div>
-                <div style='background: rgba(189, 195, 199, 0.3); height: 10px; border-radius: 5px; margin: 8px 0; overflow: hidden;'>
-                    <div style='background: {health_color}; width: {current_health_width}%; height: 10px; border-radius: 5px; transition: width 0.3s ease-in-out;'></div>
-                </div>
-                <div style='text-align: right; color: {health_color}; font-weight: bold;'>{health:.1f}%</div>
-            </div>
-            """
+            result_text += f'{icon_html}<span style="font-weight:bold">{name}</span> ({profession}) - '
+            result_text += f'血量: <span style="color:{color};font-weight:bold">{health:.1f}%</span> '
+            result_text += f'状态: <span style="color:{status_color}">{status}</span><br/>'
         
         result_text += "</body></html>"
         self.monitor_result_label.setText(result_text)
     
     def update_monitor_status(self, status):
         """更新监控状态信息"""
-        if hasattr(self, 'monitor_status_label'):
-            # 更新设置页面的状态标签
-            self.monitor_status_label.setText(status)
-            
-            # 根据状态设置不同颜色
-            if "启动" in status or "开始" in status:
-                self.monitor_status_label.setStyleSheet('font-weight: bold; color: #2ECC71;')
-            elif "停止" in status or "错误" in status:
-                self.monitor_status_label.setStyleSheet('font-weight: bold; color: #E74C3C;')
-            else:
-                self.monitor_status_label.setStyleSheet('font-weight: bold; color: #3498DB;')
-        
         if self.monitor_result_label:
             current_text = self.monitor_result_label.text()
             if "状态:" in current_text:
@@ -1781,39 +1276,6 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打开颜色设置对话框时出错: {str(e)}")
 
-    def start_monitoring_from_settings(self):
-        """从设置页面开始监控"""
-        # 启动监控
-        if self.health_monitor.start_monitoring():
-            # 更新监控状态
-            self.monitor_status_label.setText("正在监控")
-            self.monitor_status_label.setStyleSheet('font-weight: bold; color: #2ECC71;')
-            # 切换到监控标签页查看结果
-            self.tab_widget.setCurrentIndex(1)  # 切换到血条监控标签页
-    
-    def stop_monitoring_from_settings(self):
-        """从设置页面停止监控"""
-        # 停止监控
-        if self.health_monitor.stop_monitoring():
-            # 更新监控状态
-            self.monitor_status_label.setText("已停止")
-            self.monitor_status_label.setStyleSheet('font-weight: bold; color: #E74C3C;')
-    
-def load_style_sheet(app):
-    """加载现代风格样式表"""
-    try:
-        print("加载现代淡蓝色风格样式表...")
-        style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "style.qss")
-        if os.path.exists(style_path):
-            with open(style_path, "r", encoding="utf-8") as f:
-                style = f.read()
-                app.setStyleSheet(style)
-                print("成功加载现代淡蓝色风格样式表")
-        else:
-            print(f"样式表文件不存在: {style_path}")
-    except Exception as e:
-        print(f"加载样式表时出错: {e}")
-
 def main():
     # 在创建QApplication之前设置DPI感知
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
@@ -1824,14 +1286,6 @@ def main():
     
     try:
         app = QApplication(sys.argv)
-        # 加载现代风格样式表
-        load_style_sheet(app)
-        
-        # 确保资源目录存在
-        resources_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources")
-        images_dir = os.path.join(resources_dir, "images")
-        os.makedirs(images_dir, exist_ok=True)
-        
         window = MainWindow()
         window.show()
         sys.exit(app.exec())
