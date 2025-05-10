@@ -333,9 +333,9 @@ class HealthBarCalibration:
                 teammate.x2 = x2
                 teammate.y2 = y2
                 
-                # 设置默认的血条颜色范围
-                teammate.hp_color_lower = np.array([43, 71, 121])
-                teammate.hp_color_upper = np.array([63, 171, 221])
+                # 设置默认的血条颜色范围（降低范围，使检测更精确）
+                teammate.hp_color_lower = np.array([45, 80, 130])
+                teammate.hp_color_upper = np.array([60, 160, 210])
                 
                 # 保存队友配置
                 teammate.save_config()

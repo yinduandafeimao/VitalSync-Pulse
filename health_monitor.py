@@ -9,7 +9,7 @@ import pyautogui
 import keyboard
 import win32api  # 导入win32api用于检测鼠标状态
 import win32con  # 导入win32con用于鼠标键值常量
-from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QLineEdit
+from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QLineEdit, QMainWindow
 from PySide6.QtCore import QTimer, Signal, QObject, QRect, QEventLoop
 from 选择框 import TransparentSelectionBox
 import json
@@ -463,9 +463,9 @@ class HealthMonitor:
                     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                     # 获取HSV值
                     h, s, v = hsv[0, 0]
-                    # 设置HSV范围（允许一定的颜色变化）
-                    member.hp_color_lower = np.array([max(0, h-10), max(0, s-50), max(0, v-50)])
-                    member.hp_color_upper = np.array([min(180, h+10), min(255, s+50), min(255, v+50)])
+                    # 设置HSV范围（大幅降低范围值，使检测更精确）
+                    member.hp_color_lower = np.array([max(0, h-3), max(0, s-25), max(0, v-25)])
+                    member.hp_color_upper = np.array([min(180, h+3), min(255, s+25), min(255, v+25)])
                     
                     # 更新状态和日志
                     print(f"{member.name}的HSV颜色值: ({h}, {s}, {v})")
@@ -625,7 +625,18 @@ class HealthMonitor:
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
         
+        # 发送状态信号
         self.signals.status_signal.emit("监控已启动")
+        
+        # 播放语音提示（如果主窗口有TTS功能）
+        try:
+            # 尝试获取主窗口对象并播放语音
+            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
+            if main_window and hasattr(main_window, 'play_speech'):
+                main_window.play_speech("监控已启动，开始实时跟踪队友状态")
+        except Exception as e:
+            print(f"播放开始监控语音提示失败: {str(e)}")
+            
         return True
     
     def stop_monitoring(self):
@@ -645,9 +656,19 @@ class HealthMonitor:
             self.monitor_thread.join(timeout=1.0)
             self.monitor_thread = None
         
-        # 发送清除监控日志的信号
+        # 发送清除监控日志的信号和状态信号
         self.signals.update_signal.emit([])
         self.signals.status_signal.emit("监控已停止")
+        
+        # 播放语音提示（如果主窗口有TTS功能）
+        try:
+            # 尝试获取主窗口对象并播放语音
+            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
+            if main_window and hasattr(main_window, 'play_speech'):
+                main_window.play_speech("监控已停止")
+        except Exception as e:
+            print(f"播放停止监控语音提示失败: {str(e)}")
+            
         return True
     
     def release_resources(self):
@@ -796,9 +817,10 @@ class HealthMonitor:
         if self.check_right_button():
             return
             
-        # 筛选血量低于阈值的存活队友
+        # 筛选血量低于阈值的存活队友（必须是存活状态且血量大于0）
         low_health_members = [member for member in self.team.members 
-                             if member.is_alive and member.health_percentage < self.health_threshold]
+                             if member.is_alive and member.health_percentage > 0 and 
+                             member.health_percentage < self.health_threshold]
                              
         if not low_health_members:
             return  # 没有低血量队友

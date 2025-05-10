@@ -1,0 +1,17 @@
+{
+    "low_health_warning": {
+        "enabled": true,
+        "threshold": 30.0,
+        "cooldown": 5.0,
+        "warning_text": "{name}血量过低，仅剩{health}%"
+    },
+    "voice_settings": {
+        "enabled": true,
+        "voice": "zh-CN-XiaoxiaoNeural"
+    },
+    "team_danger_warning": {
+        "enabled": true,
+        "low_health_count": 2,
+        "warning_text": "警告，团队状态危险，{count}名队友血量过低"
+    }
+}

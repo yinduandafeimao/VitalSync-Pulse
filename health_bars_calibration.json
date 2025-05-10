@@ -2,24 +2,24 @@
     "calibration_sets": {
         "5条血条_05071620": {
             "count": 5,
-            "calibration_time": "2025-05-07 17:11:26",
+            "calibration_time": "2025-05-09 23:50:13",
             "health_bars": [
                 {
                     "x1": 875,
                     "y1": 351,
                     "x2": 1047,
                     "y2": 422,
-                    "recognition_done": true,
-                    "name": "英短肥猫",
-                    "profession": "汐灵汐"
+                    "recognition_done": false,
+                    "name": "查看已有图",
+                    "profession": "未知"
                 },
                 {
                     "x1": 873,
                     "y1": 425,
                     "x2": 1048,
                     "y2": 497,
-                    "recognition_done": true,
-                    "name": "鬼王宗弟子",
+                    "recognition_done": false,
+                    "name": "队友2",
                     "profession": "未知"
                 },
                 {
@@ -27,8 +27,8 @@
                     "y1": 501,
                     "x2": 1047,
                     "y2": 570,
-                    "recognition_done": true,
-                    "name": "合欢派弟子",
+                    "recognition_done": false,
+                    "name": "置校准工具",
                     "profession": "未知"
                 },
                 {
@@ -36,8 +36,8 @@
                     "y1": 574,
                     "x2": 1047,
                     "y2": 641,
-                    "recognition_done": true,
-                    "name": "焚香谷弟子",
+                    "recognition_done": false,
+                    "name": "控血量",
                     "profession": "未知"
                 },
                 {
@@ -45,12 +45,159 @@
                     "y1": 646,
                     "x2": 1046,
                     "y2": 712,
+                    "recognition_done": false,
+                    "name": "队友5",
+                    "profession": "未知"
+                }
+            ]
+        },
+        "10条血条_05092203": {
+            "count": 10,
+            "calibration_time": "2025-05-09 23:27:29",
+            "health_bars": [
+                {
+                    "x1": 58,
+                    "y1": 252,
+                    "x2": 196,
+                    "y2": 325,
+                    "recognition_done": true,
+                    "name": "大拖鞋",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 60,
+                    "y1": 335,
+                    "x2": 197,
+                    "y2": 409,
+                    "recognition_done": true,
+                    "name": "樱桃果酱",
+                    "profession": "灵灵汐"
+                },
+                {
+                    "x1": 58,
+                    "y1": 413,
+                    "x2": 197,
+                    "y2": 488,
+                    "recognition_done": true,
+                    "name": "伊芙琳",
+                    "profession": "影合欢"
+                },
+                {
+                    "x1": 59,
+                    "y1": 499,
+                    "x2": 197,
+                    "y2": 570,
+                    "recognition_done": true,
+                    "name": "发疯的蜡",
+                    "profession": "影合欢"
+                },
+                {
+                    "x1": 60,
+                    "y1": 580,
+                    "x2": 197,
+                    "y2": 652,
+                    "recognition_done": true,
+                    "name": "剑清风",
+                    "profession": "剑青云"
+                },
+                {
+                    "x1": 207,
+                    "y1": 254,
+                    "x2": 345,
+                    "y2": 328,
+                    "recognition_done": true,
+                    "name": "走位啊喂",
+                    "profession": "汐灵汐"
+                },
+                {
+                    "x1": 209,
+                    "y1": 333,
+                    "x2": 345,
+                    "y2": 406,
+                    "recognition_done": true,
+                    "name": "找找自己",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 207,
+                    "y1": 417,
+                    "x2": 345,
+                    "y2": 489,
+                    "recognition_done": true,
+                    "name": "云旭汐",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 208,
+                    "y1": 500,
+                    "x2": 345,
+                    "y2": 567,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "汐灵汐"
+                },
+                {
+                    "x1": 207,
+                    "y1": 579,
+                    "x2": 345,
+                    "y2": 650,
+                    "recognition_done": true,
+                    "name": "杨柳岸晓",
+                    "profession": "剑青云"
+                }
+            ]
+        },
+        "5条血条_05092350": {
+            "count": 5,
+            "calibration_time": "2025-05-09 23:55:25",
+            "health_bars": [
+                {
+                    "x1": 1696,
+                    "y1": 493,
+                    "x2": 1884,
+                    "y2": 568,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "汐灵汐"
+                },
+                {
+                    "x1": 1696,
+                    "y1": 573,
+                    "x2": 1884,
+                    "y2": 651,
+                    "recognition_done": true,
+                    "name": "鬼王宗弟子",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 1694,
+                    "y1": 657,
+                    "x2": 1885,
+                    "y2": 727,
+                    "recognition_done": true,
+                    "name": "D合欢派弟子",
+                    "profession": "月合欢"
+                },
+                {
+                    "x1": 1696,
+                    "y1": 738,
+                    "x2": 1885,
+                    "y2": 810,
+                    "recognition_done": true,
+                    "name": "焚香谷弟子",
+                    "profession": "炎焚香"
+                },
+                {
+                    "x1": 1698,
+                    "y1": 817,
+                    "x2": 1882,
+                    "y2": 887,
                     "recognition_done": true,
                     "name": "青云门弟子",
-                    "profession": "未知"
+                    "profession": "法剑"
                 }
             ]
         }
     },
-    "last_used": "5条血条_05071620"
+    "last_used": "5条血条_05092350"
 }

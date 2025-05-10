@@ -170,7 +170,7 @@ class TeammateRecognition:
         Match profession icon
         """
         best_match = None
-        highest_score = 0.75  # 提高最低匹配阈值 / Increase the minimum matching threshold
+        highest_score = 0.70  # 稍微降低最低匹配阈值，增加匹配成功率
         match_results = {}  # 存储所有匹配结果 / Store all matching results
 
         try:
