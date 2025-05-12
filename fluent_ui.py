@@ -731,8 +731,8 @@ class MainWindow(FluentWindow):
         memberLayout.setContentsMargins(5, 0, 5, 0)
         memberLayout.setSpacing(10)
         
-        # 队员编号和名称
-        nameLabel = StrongBodyLabel(f"队员 {index+1}")
+        # 队员编号和名称 - 使用实际名称
+        nameLabel = StrongBodyLabel(name) # <-- 修改这里
         nameLabel.setObjectName(f"name_label_{index}")
         nameLabel.setStyleSheet("font-size: 14px; font-weight: bold;")
         nameLabel.setFixedWidth(80)
@@ -746,6 +746,10 @@ class MainWindow(FluentWindow):
         healthBarContainer = QFrame()
         healthBarContainer.setFixedHeight(25)
         healthBarContainer.setStyleSheet("background-color: #333; border-radius: 5px;")
+        # --- 添加：设置最大宽度 --- 
+        MAX_WIDTH = 300  # 与 update_health_display 中保持一致
+        healthBarContainer.setMaximumWidth(MAX_WIDTH) 
+        # --- 结束添加 ---
         healthBarContainerLayout = QHBoxLayout(healthBarContainer)
         healthBarContainerLayout.setContentsMargins(2, 2, 2, 2)
         healthBarContainerLayout.setSpacing(0)
@@ -807,7 +811,7 @@ class MainWindow(FluentWindow):
         # 添加到卡片布局
         memberLayout.addWidget(nameLabel)
         memberLayout.addWidget(roleLabel)
-        memberLayout.addWidget(healthBarContainer, 1)  # 血条占据更多空间
+        memberLayout.addWidget(healthBarContainer)
         memberLayout.addWidget(valueLabel)
         memberLayout.addWidget(debugLabel)  # 添加调试标签
         
@@ -2205,7 +2209,8 @@ class MainWindow(FluentWindow):
             value_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 15px;")
             
             if name_label:
-                name_label_text = f"队员 {i+1}" # 保持"队员 X"的格式
+                # name_label_text = f"队员 {i+1}" # 保持"队员 X"的格式
+                name_label_text = name # <-- 修改这里，使用 health_data 中的名字
                 if name_label.text() != name_label_text:
                     name_label.setText(name_label_text)
                 if not is_alive:
