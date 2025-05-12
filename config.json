@@ -1,13 +1,13 @@
 {
     "voice_settings": {
-        "rate": 10,
+        "rate": 5,
         "volume": 80,
         "selected_voice": "晓晓 (普通话女)"
     },
     "low_health_alert_settings": {
         "enabled": true,
         "threshold": 30.0,
-        "cooldown": 3.0,
+        "cooldown": 5.0,
         "warning_text": "{name}血量过低，仅剩{health}%",
         "team_danger_enabled": true,
         "team_danger_threshold": 2,

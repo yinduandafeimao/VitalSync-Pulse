@@ -98,6 +98,7 @@ class MainWindow(FluentWindow):
         # 初始化 pygame mixer
         try:
             pygame.mixer.init()
+            pygame.mixer.set_num_channels(16) # 设置足够多的声道
         except pygame.error as e:
             print(f"Pygame mixer 初始化失败: {e}")
             # 可以选择禁用语音功能或显示错误提示
@@ -187,8 +188,14 @@ class MainWindow(FluentWindow):
         
         # 初始化语音队列和工作线程
         self.speech_queue = queue.Queue()
+        self.active_speech = {} # 用于跟踪正在播放的语音及其资源
         self.speech_worker_thread = threading.Thread(target=self._speech_worker_loop, daemon=True)
         self.speech_worker_thread.start()
+        
+        # 设置一个定时器来处理 Pygame 事件和清理
+        self.pygame_event_timer = QTimer(self)
+        self.pygame_event_timer.timeout.connect(self._process_pygame_events)
+        self.pygame_event_timer.start(100) # 每 100ms 检查一次
     
     def initNavigation(self):
         """初始化导航栏"""
@@ -2392,21 +2399,26 @@ class MainWindow(FluentWindow):
         self.speech_queue.put(task)
 
     def _execute_speech(self, text, voice='zh-CN-XiaoxiaoNeural', rate='+0%', volume='+0%'):
-        """使用 edge-tts 合成语音并使用 pygame 播放 (由工作线程调用)"""
-        print(f"[{threading.current_thread().name}] _execute_speech: voice={voice}, rate={rate}, volume={volume}, text='{text[:30]}...' ") # 调试信息
-        output_path = None # 初始化为 None
-        temp_file = None   # 初始化临时文件对象
+        """使用 edge-tts 合成语音并使用 pygame.mixer.Sound 播放 (由工作线程调用)
+        
+        语音合成 -> 加载 Sound -> 查找空闲 Channel -> 播放 -> 注册结束事件 -> 返回
+        实际的资源清理由 _process_pygame_events 通过定时器处理
+        """
+        print(f"[{threading.current_thread().name}] _execute_speech: voice={voice}, rate={rate}, volume={volume}, text='{text[:30]}...' ")
+        output_path = None
+        temp_file = None
+        sound = None
+        channel = None
         
         try:
-            # 创建唯一的临时文件
+            # 1. 创建唯一的临时文件
             temp_file = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
             output_path = temp_file.name
-            temp_file.close() # 关闭句柄，edge-tts 会重新打开
+            temp_file.close()
             print(f"[{threading.current_thread().name}] 创建唯一临时文件: {output_path}")
 
-            # --- 异步生成部分 ---
-            async def _generate_speech_async(): # Renamed internal async function for clarity
-                # nonlocal output_path # 确保内部函数使用的是外部定义的 output_path
+            # 2. 异步生成语音文件
+            async def _generate_speech_async():
                 try:
                     print(f"[{threading.current_thread().name}] 尝试生成语音到 {output_path}...")
                     communicate = edge_tts.Communicate(text, voice=voice, rate=rate, volume=volume)
@@ -2422,7 +2434,7 @@ class MainWindow(FluentWindow):
                      return None
                 except Exception as e:
                     print(f'[{threading.current_thread().name}] edge-tts 语音合成时发生异常: {e}')
-                    return None # 不再尝试删除，因为我们会在 finally 中处理
+                    return None
 
             # --- 同步执行异步生成 ---
             generated_path = None
@@ -2432,72 +2444,109 @@ class MainWindow(FluentWindow):
                 print(f"[{threading.current_thread().name}] asyncio 运行完成, generated_path = {generated_path}")
             except RuntimeError as e:
                 if "cannot run event loop while another loop is running" in str(e):
-                    print(f"[{threading.current_thread().name}] 检测到现有事件循环，尝试使用 run_until_complete...")
+                    print(f"[{threading.current_thread().name}] 检测到现有事件循环...")
                     try:
                         loop = asyncio.get_event_loop()
                         generated_path = loop.run_until_complete(_generate_speech_async())
                         print(f"[{threading.current_thread().name}] run_until_complete 完成, generated_path = {generated_path}")
                     except Exception as inner_e:
-                        print(f"[{threading.current_thread().name}] 在现有事件循环中运行语音生成失败: {inner_e}")
+                        print(f"[{threading.current_thread().name}] 现有事件循环运行失败: {inner_e}")
                 else:
-                    print(f"[{threading.current_thread().name}] 运行 asyncio 时发生 RuntimeError: {e}")
+                    print(f"[{threading.current_thread().name}] asyncio RuntimeError: {e}")
             except Exception as e:
-                 print(f"[{threading.current_thread().name}] 语音生成过程中发生未知错误: {e}")
+                 print(f"[{threading.current_thread().name}] 语音生成未知错误: {e}")
 
-            # --- 播放部分 (使用 pygame) ---
+            # 3. 加载和播放 (如果生成成功)
             if generated_path and os.path.exists(generated_path):
-                print(f"[{threading.current_thread().name}] 准备使用 pygame 播放 {generated_path}")
+                print(f"[{threading.current_thread().name}] 准备加载和播放 {generated_path}")
                 try:
                     if not pygame.mixer.get_init():
                         print(f"[{threading.current_thread().name}] Pygame mixer 未初始化，尝试重新初始化...")
                         pygame.mixer.init()
+                        pygame.mixer.set_num_channels(16) # 确保声道已设置
 
-                    pygame.mixer.music.load(generated_path)
-                    print(f"[{threading.current_thread().name}] 文件 {generated_path} 已加载到 pygame mixer.")
-                    pygame.mixer.music.play()
-                    print(f"[{threading.current_thread().name}] 开始播放 {generated_path}...")
-                    while pygame.mixer.music.get_busy():
-                        pygame.time.Clock().tick(10)
-                    print(f"[{threading.current_thread().name}] 文件 {generated_path} 播放完成.")
+                    # 加载为 Sound 对象
+                    sound = pygame.mixer.Sound(generated_path)
+                    print(f"[{threading.current_thread().name}] 文件 {generated_path} 已加载为 Sound 对象.")
+                    
+                    # 查找一个空闲的 Channel
+                    channel = pygame.mixer.find_channel(True) # force=True 会强制获取一个声道
+                    if channel:
+                        print(f"[{threading.current_thread().name}] 获取到空闲声道: {channel}")
+                        
+                        # 存储信息以便后续清理 - 使用 channel 对象本身作为键
+                        self.active_speech[channel] = {'filename': generated_path, 'sound': sound}
+                        
+                        # 播放声音
+                        channel.play(sound)
+                        print(f"[{threading.current_thread().name}] 在声道 {channel} 上开始播放...")
+                        
+                        # ！！！关键：不再等待播放结束，直接返回，让工作线程处理下一个任务
+                        output_path = None # 清空 output_path 防止 finally 块尝试删除
+                        return # <--- Worker thread is now free!
+                        
+                    else:
+                        print(f"[{threading.current_thread().name}] 错误: 无法找到空闲的 Pygame 声道!")
+
                 except pygame.error as e:
-                    print(f"[{threading.current_thread().name}] Pygame 播放音频失败: {e}")
+                    print(f"[{threading.current_thread().name}] Pygame 加载/播放 Sound 失败: {e}")
                 except Exception as e:
-                    print(f"[{threading.current_thread().name}] 播放过程中发生未知错误: {e}")
-                finally:
-                    # 清理 pygame 资源
-                    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                        print(f"[{threading.current_thread().name}] 停止可能仍在播放的音乐...")
-                        pygame.mixer.music.stop()
-                    if pygame.mixer.get_init():
-                        print(f"[{threading.current_thread().name}] 尝试卸载音乐文件...")
-                        try:
-                            pygame.mixer.music.unload()
-                            print(f"[{threading.current_thread().name}] 音乐文件已卸载.")
-                        except pygame.error as unload_err:
-                            print(f"[{threading.current_thread().name}] 卸载音乐文件时出错: {unload_err}")
-            # 如果生成失败或文件不存在
-            elif generated_path is None:
-                 print(f"[{threading.current_thread().name}] 语音生成失败或未返回有效文件路径，跳过播放。")
-            else:
-                 print(f"[{threading.current_thread().name}] 错误: generated_path '{generated_path}' 指向的文件不存在，无法播放。")
-
+                    print(f"[{threading.current_thread().name}] 加载/播放过程中发生未知错误: {e}")
+            
+            # 如果生成失败或播放未成功启动，则 generated_path 仍然指向临时文件
+            output_path = generated_path # 确保 finally 块能清理生成失败的文件
+            
         finally:
-            # --- 最终清理部分 --- 
-            # 确保临时文件最终被删除
+            # 4. 最终清理 (只清理那些未成功启动播放的临时文件)
+            # 成功启动播放的文件由 _process_pygame_events 清理
             if output_path and os.path.exists(output_path):
-                print(f"[{threading.current_thread().name}] 最终清理：尝试删除临时文件 {output_path}...")
-                time.sleep(0.1) # 短暂等待，增加删除成功率
+                print(f"[{threading.current_thread().name}] _execute_speech 清理：删除未播放或生成失败的文件 {output_path}...")
                 try:
                     os.remove(output_path)
-                    print(f"[{threading.current_thread().name}] 临时文件 {output_path} 已删除.")
-                except PermissionError:
-                    print(f"[{threading.current_thread().name}] 最终清理删除失败: 无法删除临时文件 {output_path}，权限不足或仍被占用。")
+                    print(f"[{threading.current_thread().name}] 文件 {output_path} 已删除.")
                 except Exception as e:
-                    print(f"[{threading.current_thread().name}] 最终清理删除临时文件时发生其他错误: {e}")
+                    print(f"[{threading.current_thread().name}] _execute_speech 清理时删除文件 {output_path} 失败: {e}")
             elif output_path:
-                 print(f"[{threading.current_thread().name}] 最终清理：临时文件 {output_path} 已不存在，无需删除.")
-            else:
-                print(f"[{threading.current_thread().name}] 最终清理：output_path 未生成，无需删除.")
+                 print(f"[{threading.current_thread().name}] _execute_speech 清理：文件 {output_path} 已不存在.")
+
+    def _process_pygame_events(self):
+        """由 QTimer 调用，处理 Pygame 事件队列和检查播放结束状态。"""
+        if not pygame.get_init() or not pygame.mixer.get_init():
+            return # Pygame 未初始化，不做处理
+
+        # 移除 pygame.event.get() 循环和基于 USEREVENT 的检查
+
+        finished_channels = []
+        # 迭代活动声道的副本，因为我们可能在循环中修改字典
+        for channel, speech_info in list(self.active_speech.items()):
+            if not channel.get_busy():
+                print(f"主线程定时器: 检测到声道 {channel} 播放结束。")
+                filename = speech_info.get('filename')
+                
+                print(f"主线程定时器: 清理声道 {channel} 的资源，文件: {filename}")
+                
+                # 尝试删除文件
+                if filename and os.path.exists(filename):
+                    try:
+                        os.remove(filename)
+                        print(f"主线程定时器: 临时文件 {filename} 已删除.")
+                    except PermissionError:
+                        print(f"主线程定时器: 删除失败 - 无法删除临时文件 {filename}，权限不足或仍被占用。")
+                    except Exception as e:
+                        print(f"主线程定时器: 删除临时文件 {filename} 时发生其他错误: {e}")
+                elif filename:
+                    print(f"主线程定时器: 清理时文件 {filename} 已不存在，无需删除.")
+
+                finished_channels.append(channel) # 标记此声道为完成
+
+        # 从 active_speech 字典中移除已完成的声道
+        for channel in finished_channels:
+            if channel in self.active_speech:
+                del self.active_speech[channel]
+                print(f"主线程定时器: 已从 active_speech 移除声道 {channel} 的记录。")
+
+        # 可以保留 pygame.event.pump() 来确保 Pygame 内部事件处理正常进行
+        pygame.event.pump()
 
     def _speech_worker_loop(self):
         """语音播报工作线程的主循环"""
