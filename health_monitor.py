@@ -9,8 +9,8 @@ import pyautogui
 import keyboard
 import win32api  # 导入win32api用于检测鼠标状态
 import win32con  # 导入win32con用于鼠标键值常量
-from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QLineEdit
-from PySide6.QtCore import QTimer, Signal, QObject, QRect, QEventLoop
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QLineEdit, QMainWindow
+from PyQt5.QtCore import QTimer, pyqtSignal, QObject, QRect, QEventLoop
 from 选择框 import TransparentSelectionBox
 import json
 
@@ -26,8 +26,8 @@ get_hp_percentage = health_bar_module.get_hp_percentage
 
 class MonitorSignals(QObject):
     """定义监控信号类，用于在线程间传递信号"""
-    update_signal = Signal(object)  # 更新血量信号，传递队员血量列表
-    status_signal = Signal(str)   # 状态信号，传递监控状态信息
+    update_signal = pyqtSignal(object)  # 更新血量信号，传递队员血量列表
+    status_signal = pyqtSignal(str)   # 状态信号，传递监控状态信息
 
 class HealthMonitor:
     """血条监控类
@@ -463,9 +463,9 @@ class HealthMonitor:
                     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                     # 获取HSV值
                     h, s, v = hsv[0, 0]
-                    # 设置HSV范围（允许一定的颜色变化）
-                    member.hp_color_lower = np.array([max(0, h-10), max(0, s-50), max(0, v-50)])
-                    member.hp_color_upper = np.array([min(180, h+10), min(255, s+50), min(255, v+50)])
+                    # 设置HSV范围（大幅降低范围值，使检测更精确）
+                    member.hp_color_lower = np.array([max(0, h-3), max(0, s-25), max(0, v-25)])
+                    member.hp_color_upper = np.array([min(180, h+3), min(255, s+25), min(255, v+25)])
                     
                     # 更新状态和日志
                     print(f"{member.name}的HSV颜色值: ({h}, {s}, {v})")
@@ -596,11 +596,10 @@ class HealthMonitor:
         """开始监控"""
         # 如果已经在监控中，只显示消息不做其他操作
         if self.monitoring:
-            # 只在通过快捷键触发时显示消息（减少重复消息）
             import inspect
             caller_frame = inspect.currentframe().f_back
             caller_name = caller_frame.f_code.co_name if caller_frame else ""
-            if 'record_hook' in caller_name or caller_name == "":  # 由快捷键触发
+            if 'record_hook' in caller_name or caller_name == "":
                 self.signals.status_signal.emit("监控已经在运行中")
             return False
         
@@ -608,10 +607,8 @@ class HealthMonitor:
             self.signals.status_signal.emit("没有队员可以监控")
             return False
         
-        # 检查队员血条设置是否完整
         incomplete_members = []
         for member in self.team.members:
-            # 检查血条位置是否设置（简单检查坐标是否为默认值）
             if member.x1 == 100 and member.y1 == 100 and member.x2 == 300 and member.y2 == 120:
                 incomplete_members.append(f"{member.name} (未设置血条位置)")
         
@@ -626,6 +623,24 @@ class HealthMonitor:
         self.monitor_thread.start()
         
         self.signals.status_signal.emit("监控已启动")
+        
+        # 尝试立即获取并发送一次初始血量数据
+        try:
+            print("监控启动后，尝试立即发送初始血量数据...")
+            initial_results = self.team.update_all_health()
+            print(f"获取到的初始血量数据: {initial_results}")
+            self.signals.update_signal.emit(initial_results)
+        except Exception as e:
+            print(f"发送初始血量数据时出错: {str(e)}")
+            self.signals.status_signal.emit(f"发送初始血量失败: {str(e)}")
+            
+        try:
+            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
+            if main_window and hasattr(main_window, 'play_speech'):
+                main_window.play_speech("监控已启动，开始实时跟踪队友状态")
+        except Exception as e:
+            print(f"播放开始监控语音提示失败: {str(e)}")
+            
         return True
     
     def stop_monitoring(self):
@@ -645,9 +660,19 @@ class HealthMonitor:
             self.monitor_thread.join(timeout=1.0)
             self.monitor_thread = None
         
-        # 发送清除监控日志的信号
+        # 发送清除监控日志的信号和状态信号
         self.signals.update_signal.emit([])
         self.signals.status_signal.emit("监控已停止")
+        
+        # 播放语音提示（如果主窗口有TTS功能）
+        try:
+            # 尝试获取主窗口对象并播放语音
+            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
+            if main_window and hasattr(main_window, 'play_speech'):
+                main_window.play_speech("监控已停止")
+        except Exception as e:
+            print(f"播放停止监控语音提示失败: {str(e)}")
+            
         return True
     
     def release_resources(self):
@@ -796,9 +821,10 @@ class HealthMonitor:
         if self.check_right_button():
             return
             
-        # 筛选血量低于阈值的存活队友
+        # 筛选血量低于阈值的存活队友（必须是存活状态且血量大于0）
         low_health_members = [member for member in self.team.members 
-                             if member.is_alive and member.health_percentage < self.health_threshold]
+                             if member.is_alive and member.health_percentage > 0 and 
+                             member.health_percentage < self.health_threshold]
                              
         if not low_health_members:
             return  # 没有低血量队友
@@ -843,18 +869,30 @@ class HealthMonitor:
         error_count = 0  # 错误计数器
         max_errors = 3   # 最大允许错误次数
         
+        # 添加调试输出
+        print("监控线程已启动")
+        
         while self.monitoring:
             try:
                 # 更新所有队员的血量
                 results = self.team.update_all_health()
                 
-                # 发送更新信号
+                # 调试输出
+                print(f"监控线程获取到血量数据: {results}")
+                
+                # 发送更新信号 - 确保在UI线程中使用正确格式的数据
+                # 确保数据是元组列表格式: [(名称, 血量百分比, 是否存活), ...]
                 self.signals.update_signal.emit(results)
                 
                 # 检查是否有队员血量低于警戒值
+                low_health_members = []
                 for name, hp, is_alive in results:
                     if is_alive and hp < 30:  # 血量低于30%发出警告
-                        self.signals.status_signal.emit(f"警告: {name} 血量低于30%!")
+                        low_health_members.append(f"{name}({hp:.1f}%)")
+                
+                if low_health_members:
+                    warning_msg = f"警告: {', '.join(low_health_members)} 血量低于30%!"
+                    self.signals.status_signal.emit(warning_msg)
                 
                 # 尝试执行自动选择
                 self.auto_select_low_health()
@@ -868,6 +906,7 @@ class HealthMonitor:
             except Exception as e:
                 error_count += 1
                 error_msg = f"监控出错 ({error_count}/{max_errors}): {str(e)}"
+                print(error_msg)  # 同时输出到控制台便于调试
                 self.signals.status_signal.emit(error_msg)
                 
                 # 如果连续错误次数超过阈值，停止监控
@@ -880,8 +919,8 @@ class HealthMonitor:
                 time.sleep(1.0)
         
         # 线程结束时发送状态更新
-        if not self.monitoring:
-            self.signals.status_signal.emit("监控线程已结束")
+        print("监控线程已结束")
+        self.signals.status_signal.emit("监控线程已结束")
 
     def capture_health_bar(self, member):
         """截取指定队友的血条区域

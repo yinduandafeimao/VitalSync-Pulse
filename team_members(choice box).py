@@ -10,7 +10,7 @@ import sys
 import importlib.util
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QRect
-from 选择框 import TransparentSelectionBox
+from 选择框 import FluentSelectionBox, show_selection_box, TransparentSelectionBox
 from prettytable import PrettyTable  # 导入PrettyTable库用于美化输出
 
 # 动态导入带空格的模块
@@ -174,7 +174,7 @@ class TeamMember:
         print(f"设置{self.name}的血条位置...")
         print("请使用鼠标拖动选择血条区域...")
         
-        def on_selection(rect: QRect):
+        def on_selection(rect):
             self.x1 = rect.x()
             self.y1 = rect.y()
             self.x2 = rect.x() + rect.width()
@@ -183,10 +183,11 @@ class TeamMember:
             print(f"{self.name}血条结束坐标设置为: ({self.x2}, {self.y2})")
             self.save_config()  # 保存新的坐标设置
         
-        app = QApplication.instance() or QApplication(sys.argv)
-        window = TransparentSelectionBox(on_selection)
-        window.show()
-        app.exec()
+        # 显示选择框并等待用户操作
+        result = show_selection_box(on_selection)
+        
+        # 根据用户操作返回不同的结果
+        return result
     
     def set_health_bar_color(self):
         """设置血条颜色
@@ -231,22 +232,41 @@ class TeamMember:
             float: 当前血量百分比
         """
         try:
+            # 添加调试输出
+            print(f"正在更新 {self.name} 的血量信息")
+            print(f"血条位置: ({self.x1}, {self.y1}) - ({self.x2}, {self.y2})")
+            print(f"血条颜色范围: {self.hp_color_lower} - {self.hp_color_upper}")
+            
             # 使用导入的get_hp_percentage函数获取血量百分比
             hp = get_hp_percentage(self.x1, self.y1, self.x2, self.y2, 
                                   self.hp_color_lower, self.hp_color_upper)
             
-            # 更新血量和存活状态
-            self.health_percentage = hp
-            # 如果血量为0，则认为成员已死亡
-            self.is_alive = hp > 0
-            
-            return hp
+            # 检查返回结果
+            if isinstance(hp, (int, float)):
+                # 只有在结果是合理的数字时才更新
+                old_hp = self.health_percentage
+                self.health_percentage = hp
+                # 如果血量为0，则认为成员已死亡
+                old_alive = self.is_alive
+                self.is_alive = hp > 0
+                
+                # 添加血量变化日志
+                print(f"{self.name} 血量变化: {old_hp:.1f}% -> {hp:.1f}% | 状态: {'存活' if self.is_alive else '死亡'}")
+                
+                # 如果有明显变化，记录日志
+                if abs(old_hp - hp) > 1 or old_alive != self.is_alive:
+                    print(f"[重要] {self.name} 血量或状态发生明显变化!")
+                
+                return hp
+            else:
+                print(f"错误: {self.name} 获取到的血量值类型不正确: {type(hp)}")
+                return self.health_percentage  # 返回上一次的血量值
         except Exception as e:
             print(f"更新{self.name}血量时出错: {str(e)}")
-            # 发生错误时返回0，并将存活状态设为False
-            self.health_percentage = 0
-            self.is_alive = False
-            return 0
+            import traceback
+            traceback.print_exc()  # 打印堆栈跟踪
+            # 发生错误时保持原状态
+            return self.health_percentage
     
     def __str__(self):
         """返回成员信息的字符串表示"""

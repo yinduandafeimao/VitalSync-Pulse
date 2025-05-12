@@ -140,14 +140,17 @@ def get_hp_percentage(x1, y1, x2, y2, hp_color_lower, hp_color_upper):
     """
     # 验证坐标的有效性
     if x1 == x2 or y1 == y2:
-        print("错误：起始坐标和结束坐标不能相同")
+        print(f"错误：起始坐标({x1},{y1})和结束坐标({x2},{y2})不能相同")
         return 0
     if x2 < x1 or y2 < y1:
-        print("错误：结束坐标x轴、y轴必须大于起始坐标")
+        print(f"错误：结束坐标({x2},{y2})x轴、y轴必须大于起始坐标({x1},{y1})")
         return 0
         
     # 截取屏幕指定区域
     try:
+        # 调试输出
+        print(f"尝试获取区域：({x1}, {y1}) - ({x2}, {y2}), 宽度x高度: {x2-x1}x{y2-y1}")
+        
         screenshot = pyautogui.screenshot(region=(x1, y1, x2-x1, y2-y1))
         frame = np.array(screenshot)
         
@@ -159,6 +162,16 @@ def get_hp_percentage(x1, y1, x2, y2, hp_color_lower, hp_color_upper):
         
         # 创建血条颜色的掩码
         mask = cv2.inRange(hsv, hp_color_lower, hp_color_upper)
+        
+        # 调试输出：掩码信息
+        white_pixels = np.sum(mask > 0)
+        total_pixels = mask.size
+        detection_ratio = (white_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+        print(f"检测到的像素比例: {detection_ratio:.2f}% ({white_pixels}/{total_pixels}像素)")
+        
+        # 如果几乎没有检测到任何像素，可能是颜色范围设置不正确
+        if white_pixels < 5:
+            print(f"警告: 几乎没有检测到血条颜色，请检查颜色范围设置: {hp_color_lower} - {hp_color_upper}")
         
         # 从右向左扫描血条
         total_width = x2 - x1
@@ -172,9 +185,13 @@ def get_hp_percentage(x1, y1, x2, y2, hp_color_lower, hp_color_upper):
         
         # 计算血量百分比
         hp_percentage = (hp_end / total_width) * 100
+        print(f"血条宽度: {hp_end}/{total_width} = {hp_percentage:.1f}%")
+        
         return hp_percentage
     except Exception as e:
         print(f"错误：处理图像时发生异常 - {str(e)}")
+        import traceback
+        traceback.print_exc()  # 打印详细的堆栈跟踪
         return 0
 
 # 全局变量初始化

@@ -1,50 +1,101 @@
 {
     "calibration_sets": {
-        "5条血条_05071620": {
+        "5条血条_05121002": {
             "count": 5,
-            "calibration_time": "2025-05-07 17:11:26",
+            "calibration_time": "2025-05-12 11:48:54",
             "health_bars": [
                 {
-                    "x1": 875,
-                    "y1": 351,
-                    "x2": 1047,
-                    "y2": 422,
+                    "x1": 873,
+                    "y1": 397,
+                    "x2": 1046,
+                    "y2": 464,
                     "recognition_done": true,
-                    "name": "英短肥猫",
-                    "profession": "汐灵汐"
+                    "name": "鬼王宗弟子",
+                    "profession": "罡鬼王"
                 },
                 {
-                    "x1": 873,
-                    "y1": 425,
-                    "x2": 1048,
-                    "y2": 497,
+                    "x1": 876,
+                    "y1": 473,
+                    "x2": 1047,
+                    "y2": 540,
+                    "recognition_done": true,
+                    "name": "合欢派弟子",
+                    "profession": "月合欢"
+                },
+                {
+                    "x1": 875,
+                    "y1": 546,
+                    "x2": 1044,
+                    "y2": 611,
+                    "recognition_done": true,
+                    "name": "焚香谷弟子",
+                    "profession": "炎焚香"
+                },
+                {
+                    "x1": 876,
+                    "y1": 619,
+                    "x2": 1045,
+                    "y2": 685,
+                    "recognition_done": true,
+                    "name": "青云门弟子",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 875,
+                    "y1": 693,
+                    "x2": 1045,
+                    "y2": 754,
+                    "recognition_done": true,
+                    "name": "队友5",
+                    "profession": "未知"
+                }
+            ]
+        },
+        "5条血条_05122314": {
+            "count": 5,
+            "calibration_time": "2025-05-12 23:15:19",
+            "health_bars": [
+                {
+                    "x1": 1195,
+                    "y1": 595,
+                    "x2": 1365,
+                    "y2": 661,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 1196,
+                    "y1": 667,
+                    "x2": 1364,
+                    "y2": 729,
                     "recognition_done": true,
                     "name": "鬼王宗弟子",
                     "profession": "未知"
                 },
                 {
-                    "x1": 873,
-                    "y1": 501,
-                    "x2": 1047,
-                    "y2": 570,
+                    "x1": 1194,
+                    "y1": 741,
+                    "x2": 1364,
+                    "y2": 807,
                     "recognition_done": true,
                     "name": "合欢派弟子",
                     "profession": "未知"
                 },
                 {
-                    "x1": 874,
-                    "y1": 574,
-                    "x2": 1047,
-                    "y2": 641,
+                    "x1": 1195,
+                    "y1": 815,
+                    "x2": 1365,
+                    "y2": 875,
                     "recognition_done": true,
                     "name": "焚香谷弟子",
                     "profession": "未知"
                 },
                 {
-                    "x1": 876,
-                    "y1": 646,
-                    "x2": 1046,
-                    "y2": 712,
+                    "x1": 1195,
+                    "y1": 888,
+                    "x2": 1367,
+                    "y2": 948,
                     "recognition_done": true,
                     "name": "青云门弟子",
                     "profession": "未知"
@@ -52,5 +103,5 @@
             ]
         }
     },
-    "last_used": "5条血条_05071620"
+    "last_used": "5条血条_05122314"
 }

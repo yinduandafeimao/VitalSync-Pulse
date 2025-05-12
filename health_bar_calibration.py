@@ -5,14 +5,15 @@ import cv2
 import numpy as np
 import time
 import importlib.util
-from PySide6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QMessageBox, QProgressBar, QFrame, QInputDialog,
     QListWidget, QListWidgetItem, QAbstractItemView
 )
-from PySide6.QtCore import Qt, Signal, QObject, QRect
-from 选择框 import TransparentSelectionBox
+from PyQt5.QtCore import Qt, pyqtSignal as Signal, QObject, QRect, QTimer
+from 选择框 import show_selection_box
 from teammate_recognition import TeammateRecognition
+from qfluentwidgets import InfoBar, InfoBarPosition
 
 # 动态导入带空格的模块
 module_name = "team_members(choice box)"
@@ -255,35 +256,25 @@ class HealthBarCalibration:
             return False
     
     def _select_health_bar_area(self):
-        """选择血条区域
-        
-        显示一个透明选择框，让用户框选血条区域
-        
-        返回:
-            QRect: 用户选择的区域，如果用户取消则返回None
-        """
-        selected_rect = [None]  # 使用列表存储结果，便于在回调中修改
+        """选择血条区域"""
+        selected_rect = [None]
         
         def on_selection_complete(rect):
             selected_rect[0] = rect
             print(f"选择完成: {rect}")
         
         try:
-            # 使用单独的QApplication实例创建选择框
-            selection_box = TransparentSelectionBox(on_selection_complete)
-            selection_box.set_instruction_text("请框选血条区域，完成后按Enter键确认")
+            # 使用show_selection_box函数，它自己会管理QApplication
+            from 选择框 import show_selection_box
+            result = show_selection_box(on_selection_complete)
             
-            # 显示为模态对话框
-            result = selection_box.exec()
-            
-            print(f"对话框结果: {result}, 选择区域: {selected_rect[0]}")
-            
-            if result == QDialog.Accepted and selected_rect[0] is not None:
+            if result and selected_rect[0] is not None:
                 return selected_rect[0]
-            else:
-                return None
+            return None
         except Exception as e:
             print(f"选择区域时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def recognize_teammates(self):
@@ -333,9 +324,9 @@ class HealthBarCalibration:
                 teammate.x2 = x2
                 teammate.y2 = y2
                 
-                # 设置默认的血条颜色范围
-                teammate.hp_color_lower = np.array([43, 71, 121])
-                teammate.hp_color_upper = np.array([63, 171, 221])
+                # 设置默认的血条颜色范围（降低范围，使检测更精确）
+                teammate.hp_color_lower = np.array([45, 80, 130])
+                teammate.hp_color_upper = np.array([60, 160, 210])
                 
                 # 保存队友配置
                 teammate.save_config()
@@ -566,13 +557,15 @@ class CalibrationDialog(QDialog):
     
     def __init__(self, parent=None):
         """初始化校准对话框"""
+        # 确保QApplication已存在
+        ensure_application()
         super().__init__(parent)
         self.calibration = HealthBarCalibration()
         self.initUI()
         
         # 连接信号
         self.calibration.signals.status_signal.connect(self.update_status)
-        self.calibration.signals.progress_signal.connect(self.progress_bar.setValue)
+        self.calibration.signals.progress_signal.connect(self.update_progress)
         self.calibration.signals.complete_signal.connect(self.on_calibration_complete)
         
         # 加载校准集列表
@@ -649,9 +642,9 @@ class CalibrationDialog(QDialog):
         right_layout.addWidget(self.progress_bar)
         
         # 状态标签
-        self.status_label = QLabel("准备就绪")
-        self.status_label.setStyleSheet("color: blue;")
-        right_layout.addWidget(self.status_label)
+        self.progress_label = QLabel("准备就绪")
+        self.progress_label.setStyleSheet("color: blue;")
+        right_layout.addWidget(self.progress_label)
         
         # 按钮区域
         buttons_layout = QHBoxLayout()
@@ -747,7 +740,7 @@ class CalibrationDialog(QDialog):
                 info = self.calibration.get_calibration_set_info(set_name)
                 self.current_set_label.setText(f"当前校准集: {set_name} ({info['count']}条)")
                 self.recognize_btn.setEnabled(True)
-                self.status_label.setText(f"已加载校准集: {set_name}")
+                self.progress_label.setText(f"已加载校准集: {set_name}")
                 
                 self.result_label.setText(
                     f"校准集 '{set_name}' 已加载\n"
@@ -755,7 +748,7 @@ class CalibrationDialog(QDialog):
                     f"可以点击'识别队友'按钮开始识别"
                 )
             else:
-                self.status_label.setText(f"加载校准集失败: {set_name}")
+                self.progress_label.setText(f"加载校准集失败: {set_name}")
     
     def delete_calibration_set(self):
         """删除选中的校准集"""
@@ -773,7 +766,7 @@ class CalibrationDialog(QDialog):
             if reply == QMessageBox.Yes:
                 success = self.calibration.delete_calibration_set(set_name)
                 if success:
-                    self.status_label.setText(f"已删除校准集: {set_name}")
+                    self.progress_label.setText(f"已删除校准集: {set_name}")
                     self.load_calibration_sets()  # 重新加载列表
                     
                     # 更新当前校准集显示
@@ -785,7 +778,7 @@ class CalibrationDialog(QDialog):
                         self.current_set_label.setText("当前未选择校准集")
                         self.recognize_btn.setEnabled(False)
                 else:
-                    self.status_label.setText(f"删除校准集失败: {set_name}")
+                    self.progress_label.setText(f"删除校准集失败: {set_name}")
     
     def show_first_run_dialog(self):
         """显示首次运行对话框"""
@@ -801,7 +794,7 @@ class CalibrationDialog(QDialog):
     def recognize_teammates(self):
         """识别队友"""
         if not self.calibration.current_set_name:
-            self.status_label.setText("请先选择校准集")
+            self.progress_label.setText("请先选择校准集")
             return
             
         self.setEnabled(False)  # 禁用对话框，防止用户操作
@@ -862,8 +855,11 @@ class CalibrationDialog(QDialog):
     
     def update_status(self, message):
         """更新状态信息"""
-        self.status_label.setText(message)
-        QApplication.processEvents()  # 更新UI
+        self.progress_label.setText(message)
+    
+    def update_progress(self, value):
+        """更新进度条"""
+        self.progress_bar.setValue(value)
     
     def reset_calibration(self):
         """重置所有校准数据"""
@@ -889,10 +885,19 @@ class CalibrationDialog(QDialog):
                 else:
                     self.result_label.setText("重置校准数据失败")
             except Exception as e:
-                self.result_label.setText(f"重置校准时出错: {str(e)}")
+                # 显示错误提示
+                InfoBar.error(
+                    title='重置失败',
+                    content=f'重置校准数据时出错: {str(e)}',
+                    orient=Qt.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=3000,
+                    parent=self
+                )
             
             self.setEnabled(True)  # 恢复对话框
-
+    
     def show_bar_count_selection_dialog(self):
         """显示血条数量选择对话框
         
@@ -989,7 +994,7 @@ class CalibrationDialog(QDialog):
     def clear_teammate_recognition(self):
         """清除所有队友识别"""
         if not self.calibration.current_set_name:
-            self.status_label.setText("请先选择校准集")
+            self.progress_label.setText("请先选择校准集")
             return
         
         reply = QMessageBox.question(
@@ -1017,12 +1022,187 @@ class CalibrationDialog(QDialog):
             self.setEnabled(True)  # 恢复对话框
 
 
+def ensure_application():
+    """确保QApplication实例已经存在"""
+    # 明确使用PyQt5
+    app = QApplication.instance()
+    if app is None:
+        # 仅创建实例但不启动事件循环
+        app = QApplication(sys.argv)
+    return app
+
+def show_calibration_dialog(parent=None, auto_start=False):
+    """显示校准对话框的便捷函数
+    
+    参数:
+        parent: 父窗口
+        auto_start: 是否自动开始新建校准
+    """
+    # 确保应用已初始化
+    app = ensure_application()
+    
+    # 创建并显示对话框，避免父窗口问题
+    dialog = CalibrationDialog(None)
+    dialog.setWindowFlags(dialog.windowFlags() | Qt.Window)
+    
+    # 如果设置了自动开始，则直接触发新建校准
+    # 需要使用exec_模式而不是show()，确保对话框显示完整并且用户可以交互
+    # 只有用户确认后再返回
+    if auto_start:
+        # 先显示对话框
+        dialog.show()
+        # 等待对话框完全显示
+        QApplication.processEvents()
+        # 然后触发校准选项
+        dialog.show_calibration_options()
+    
+    # 使用exec_()方法以模态方式显示对话框，确保用户完成操作后才返回
+    dialog.exec_()
+    
+    # 返回对话框实例
+    return dialog
+
 def main():
-    """主函数"""
-    app = QApplication(sys.argv)
+    """主函数，用于独立运行校准工具"""
+    # 明确使用PyQt5
+    app = ensure_application() 
+    
+    # 设置Fluent UI主题
+    from qfluentwidgets import setTheme, Theme
+    setTheme(Theme.AUTO)
+    
+    # 显示校准对话框
     dialog = CalibrationDialog()
-    dialog.show()
-    sys.exit(app.exec())
+    dialog.exec()
+    
+    # 如果是独立运行则启动事件循环
+    if QApplication.instance() is app:
+        sys.exit(app.exec())
+
+def quick_calibration(parent=None):
+    """快速校准血条位置，不显示主界面
+    
+    直接弹出选择血条数量对话框，然后进行校准，最后保存到json文件
+    
+    参数:
+        parent: 父窗口
+    
+    返回:
+        bool: 是否成功完成校准
+    """
+    # 确保应用已初始化
+    app = ensure_application()
+    
+    # 创建校准工具实例
+    calibration = HealthBarCalibration()
+    
+    # 弹出选择血条数量的对话框
+    num_bars = select_bar_count_dialog(parent)
+    
+    if num_bars <= 0:
+        return False  # 用户取消了操作
+    
+    # 开始校准流程
+    success = calibration.start_calibration(num_bars)
+    
+    return success
+
+def select_bar_count_dialog(parent=None):
+    """显示血条数量选择对话框(独立版本)
+    
+    返回:
+        int: 用户选择的血条数量，如果用户取消则返回0
+    """
+    # 确保应用已初始化
+    app = ensure_application()
+    
+    # 创建对话框
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("选择血条数量")
+    layout = QVBoxLayout(dialog)
+    
+    # 添加说明文本
+    label = QLabel("请选择要校准的血条数量：", dialog)
+    layout.addWidget(label)
+    
+    # 添加按钮组
+    button_layout = QHBoxLayout()
+    
+    btn_5 = QPushButton("5条血条", dialog)
+    btn_10 = QPushButton("10条血条", dialog)
+    btn_20 = QPushButton("20条血条", dialog)
+    btn_custom = QPushButton("自定义...", dialog)
+    
+    button_layout.addWidget(btn_5)
+    button_layout.addWidget(btn_10)
+    button_layout.addWidget(btn_20)
+    button_layout.addWidget(btn_custom)
+    
+    layout.addLayout(button_layout)
+    
+    # 用于存储选择结果
+    result = [5]  # 默认为5条
+    
+    # 连接按钮信号
+    def on_btn_5_clicked():
+        result[0] = 5
+        dialog.accept()
+        
+    def on_btn_10_clicked():
+        result[0] = 10
+        dialog.accept()
+        
+    def on_btn_20_clicked():
+        result[0] = 20
+        dialog.accept()
+        
+    def on_btn_custom_clicked():
+        # 显示自定义数量输入对话框
+        custom_num, ok = QInputDialog.getInt(
+            dialog, 
+            "自定义血条数量", 
+            "请输入要校准的血条数量：",
+            5, 1, 50, 1
+        )
+        if ok:
+            result[0] = custom_num
+            dialog.accept()
+    
+    btn_5.clicked.connect(on_btn_5_clicked)
+    btn_10.clicked.connect(on_btn_10_clicked)
+    btn_20.clicked.connect(on_btn_20_clicked)
+    btn_custom.clicked.connect(on_btn_custom_clicked)
+    
+    # 添加取消按钮
+    cancel_layout = QHBoxLayout()
+    cancel_btn = QPushButton("取消", dialog)
+    cancel_btn.clicked.connect(dialog.reject)
+    cancel_layout.addStretch()
+    cancel_layout.addWidget(cancel_btn)
+    layout.addLayout(cancel_layout)
+    
+    # 设置对话框样式
+    dialog.setStyleSheet("""
+        QDialog {
+            background-color: #f5f5f5;
+        }
+        QLabel {
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        QPushButton {
+            min-width: 100px;
+            min-height: 30px;
+            padding: 5px;
+            font-size: 13px;
+        }
+    """)
+    
+    # 显示对话框并等待用户选择
+    if dialog.exec() == QDialog.Accepted:
+        return result[0]
+    else:
+        return 0
 
 
 if __name__ == "__main__":

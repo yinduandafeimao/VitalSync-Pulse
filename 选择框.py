@@ -1,181 +1,215 @@
 import sys
-import numpy as np
-import cv2
-from typing import Callable, Optional
-from PySide6.QtWidgets import QApplication, QWidget, QDialog, QLabel
-from PySide6.QtCore import Qt, QPoint, QRect, QEventLoop
-from PySide6.QtGui import QPainter, QColor, QPen, QScreen, QKeyEvent
+from PyQt5.QtWidgets import QApplication, QDialog, QLabel
+from PyQt5.QtCore import Qt, QPoint, QRect, QSize
+from PyQt5.QtGui import QPainter, QColor, QPen, QScreen
+from qfluentwidgets import InfoBar, InfoBarPosition, TeachingTip, ToolTipPosition
 
-class TransparentSelectionBox(QDialog):
-    def __init__(self, on_selection_complete: Optional[Callable[[QRect], None]] = None):
-        super().__init__()
-        self.initUI()
+class FluentSelectionBox(QDialog):
+    def __init__(self, parent=None, callback=None):
+        super().__init__(parent)
+        self.callback = callback
         self.start_point = QPoint()
         self.end_point = QPoint()
         self.dragging = False
-        self.on_selection_complete = on_selection_complete
         self.selected_rect = None
-        self.is_capturing = False  # 添加截图状态标志
-        # 设置为应用程序级别的模态对话框，防止干扰其他操作
-        self.setWindowModality(Qt.ApplicationModal)
-
-    def initUI(self):
+        self.is_capturing = False  # 标记是否正在截图
+        
         # 设置窗口属性
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint  # 无边框
-            | Qt.WindowType.WindowStaysOnTopHint  # 置顶
-            | Qt.WindowType.Tool  # 隐藏任务栏图标
+            Qt.FramelessWindowHint  # 无边框
+            | Qt.WindowStaysOnTopHint  # 置顶
+            | Qt.Tool  # 隐藏任务栏图标
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # 透明背景
-        self.setWindowState(Qt.WindowState.WindowFullScreen)  # 全屏覆盖
+        self.setAttribute(Qt.WA_TranslucentBackground)  # 透明背景
+        self.setWindowModality(Qt.ApplicationModal)  # 应用模态
         
-        # 获取主屏幕尺寸
-        screen = QApplication.primaryScreen()
-        self.screen_rect = screen.geometry()
+        # 获取屏幕尺寸并设置全屏
+        self.screen_rect = QApplication.primaryScreen().geometry()
         self.setGeometry(self.screen_rect)
+        
+        # 添加指导标签
+        self.instruction_label = QLabel(self)
+        self.instruction_label.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 150); color: white; padding: 10px; border-radius: 5px;"
+        )
+        self.instruction_label.setAlignment(Qt.AlignCenter)
+        self.instruction_label.move(20, 20)
+        self.showInstructions("请拖动鼠标选择区域，按Enter确认，按ESC取消")
 
+    def showInstructions(self, text):
+        """显示操作指导提示"""
+        self.instruction_label.setText(text)
+        self.instruction_label.adjustSize()
+        self.instruction_label.show()
+    
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.start_point = event.position().toPoint()
+        if event.button() == Qt.LeftButton:
+            self.start_point = event.pos()
             self.end_point = self.start_point
             self.dragging = True
             self.update()
 
     def mouseMoveEvent(self, event):
         if self.dragging:
-            self.end_point = event.position().toPoint()
+            self.end_point = event.pos()
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton and self.dragging:
             self.dragging = False
-            self.selected_rect = self.get_selected_rect()
-            self.update()
+            self.selected_rect = self.getSelectedRect()
             
-            # 按Enter键确认才能完成选择
-            # 这里只记录选择区域，但不关闭窗口
+            # 显示选择的坐标信息
+            if self.selected_rect.isValid() and self.selected_rect.width() > 5 and self.selected_rect.height() > 5:
+                rect_info = f"位置: ({self.selected_rect.x()}, {self.selected_rect.y()}), " \
+                           f"大小: {self.selected_rect.width()}x{self.selected_rect.height()}"
+                self.showInstructions(f"已选择区域: {rect_info}\n按Enter确认，按ESC取消")
+            
+            self.update()
 
     def paintEvent(self, event):
-        """绘制选择框
-        
-        使用半透明背景和边框绘制选择框。
-        使用两个不同的矩形：一个用于显示，一个用于截图。
-        """
         painter = QPainter(self)
         
         # 设置半透明背景
         painter.fillRect(self.rect(), QColor(0, 0, 0, 50))
         
-        # 如果有选择区域，则绘制选择框和清除选择框内的半透明背景
+        # 如果有选择区域，绘制选择框
         if self.selected_rect and self.selected_rect.isValid():
-            # 保存绘图状态
+            # 清除选择区域的半透明背景
             painter.save()
-            
-            # 设置选择区域为透明
             eraser = QPainter(self)
             eraser.setCompositionMode(QPainter.CompositionMode_Clear)
             eraser.fillRect(self.selected_rect, Qt.transparent)
-            
-            # 恢复绘图状态
             painter.restore()
             
-            # 绘制边框 - 仅在界面显示时
-            if not self.dragging:
-                # 使用更细的边框，设置为2像素宽
-                pen = QPen(QColor(0, 255, 0))  # 绿色边框
+            # 绘制边框，只在非截图模式下显示
+            if not self.is_capturing:
+                # 绿色边框
+                pen = QPen(QColor(0, 168, 174))  # 使用和VitalSync相同的青绿色
                 pen.setWidth(2)
                 painter.setPen(pen)
-                # 绘制边框在选择区域外侧，不会影响截图内容
                 painter.drawRect(self.selected_rect.adjusted(-2, -2, 2, 2))
+                
+                # 在四角绘制控制点
+                control_points = [
+                    QRect(self.selected_rect.left()-4, self.selected_rect.top()-4, 8, 8),
+                    QRect(self.selected_rect.right()-4, self.selected_rect.top()-4, 8, 8),
+                    QRect(self.selected_rect.left()-4, self.selected_rect.bottom()-4, 8, 8),
+                    QRect(self.selected_rect.right()-4, self.selected_rect.bottom()-4, 8, 8)
+                ]
+                
+                painter.setBrush(QColor(0, 168, 174))
+                for point in control_points:
+                    painter.drawRect(point)
         
-        # 如果正在拖动，绘制当前选择框
+        # 如果正在拖动，绘制选择框
         elif self.dragging:
-            temp_rect = self.get_selected_rect()
-            painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.DashLine))  # 白色虚线边框
-            painter.setBrush(QColor(255, 255, 255, 30))  # 半透明填充
-            painter.drawRect(temp_rect)
+            temp_rect = self.getSelectedRect()
+            if temp_rect.isValid():
+                # 绘制虚线边框和半透明背景
+                painter.setPen(QPen(QColor(255, 255, 255), 1, Qt.DashLine))
+                painter.setBrush(QColor(255, 255, 255, 30))
+                painter.drawRect(temp_rect)
+                
+                # 显示尺寸信息
+                size_text = f"{temp_rect.width()} x {temp_rect.height()}"
+                painter.setPen(Qt.white)
+                painter.drawText(temp_rect.center(), size_text)
 
-    def get_selected_rect(self):
-        # 确保矩形坐标正确(处理反向拖动)
+    def getSelectedRect(self):
+        """获取选择的矩形区域(处理反向拖动)"""
         return QRect(
             min(self.start_point.x(), self.end_point.x()),
             min(self.start_point.y(), self.end_point.y()),
             abs(self.start_point.x() - self.end_point.x()),
             abs(self.start_point.y() - self.end_point.y())
         )
-        
-    def get_selected_image(self):
-        """获取选择区域的截图, 返回numpy数组格式的图像
-        
-        Returns:
-            numpy.ndarray: 选择区域的截图, 如果截图失败则返回None
-        """
-        try:
-            # 获取选择区域
-            rect = self.get_selected_rect()
-            if rect.width() <= 0 or rect.height() <= 0:
-                print("错误: 选择区域无效")
-                return None
-                
-            # 截取选定区域的截图
-            screen = QApplication.primaryScreen()
-            screenshot = screen.grabWindow(0, rect.x(), rect.y(), rect.width(), rect.height())
+    
+    def getSelectedImage(self):
+        """获取选择区域的截图"""
+        if not self.selected_rect or not self.selected_rect.isValid():
+            return None
             
-            # 检查截图是否有效
-            if screenshot.isNull():
-                print("错误: 截图获取失败")
-                return None
-                
-            # 将QPixmap转换为numpy数组
+        try:
+            # 标记开始截图
+            self.is_capturing = True
+            self.update()  # 刷新显示，隐藏边框
+            
+            # 等待重绘完成
+            QApplication.processEvents()
+            
+            # 截取选定区域
+            screen = QApplication.primaryScreen()
+            screenshot = screen.grabWindow(
+                0, 
+                self.selected_rect.x(), 
+                self.selected_rect.y(), 
+                self.selected_rect.width(), 
+                self.selected_rect.height()
+            )
+            
+            # 转换为numpy数组
             image = screenshot.toImage()
             buffer = image.bits().tobytes()
+            
             import numpy as np
+            import cv2
             img_array = np.frombuffer(buffer, dtype=np.uint8).reshape(
                 (image.height(), image.width(), 4))
-            
-            # 转换为BGR格式(OpenCV格式)
-            import cv2
             img_array = cv2.cvtColor(img_array, cv2.COLOR_BGRA2BGR)
             
+            # 恢复显示边框
+            self.is_capturing = False
+            self.update()
+            
             return img_array
-            
         except Exception as e:
-            print(f"获取截图时出错: {str(e)}")
+            print(f"截图失败: {str(e)}")
+            self.is_capturing = False
+            self.update()
             return None
-        
-    def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
-            # 按Enter确认选择
-            if self.selected_rect and self.selected_rect.width() > 5 and self.selected_rect.height() > 5:
-                if self.on_selection_complete:
-                    self.on_selection_complete(self.selected_rect)
-                self.accept()  # 使用accept来正确关闭对话框
-        elif event.key() == Qt.Key.Key_Escape:
-            # 按ESC取消选择
-            self.reject()  # 使用reject来取消对话框
-            
-    def set_instruction_text(self, text):
-        """设置指导文本"""
-        if hasattr(self, 'instruction_label'):
-            self.instruction_label.setText(text)
-        else:
-            # 创建指导标签
-            self.instruction_label = QLabel(text, self)
-            self.instruction_label.setStyleSheet("color: white; background-color: rgba(0, 0, 0, 150);")
-            self.instruction_label.setAlignment(Qt.AlignCenter)
-            self.instruction_label.move(10, 10)
-            self.instruction_label.adjustSize()
-            self.instruction_label.show()
-
-    def start_capture(self):
-        """开始截图模式，暂时隐藏边框"""
-        self.is_capturing = True
-        self.update()
     
-    def end_capture(self):
-        """结束截图模式，恢复边框显示"""
-        self.is_capturing = False
-        self.update()
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            # 确认选择
+            if self.selected_rect and self.selected_rect.width() > 5 and self.selected_rect.height() > 5:
+                # 调用回调函数
+                if self.callback:
+                    self.callback(self.selected_rect)
+                self.accept()
+        elif event.key() == Qt.Key_Escape:
+            # 取消选择
+            self.reject()
+
+def show_selection_box(callback=None):
+    """创建并显示选择框
+    
+    参数:
+        callback: 选择完成后的回调函数，接收一个QRect参数
+        
+    返回:
+        如果用户按下Enter确认，返回True；如果按下ESC取消，返回False
+    """
+    # 确保已经有QApplication实例
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+        is_new_app = True
+    else:
+        is_new_app = False
+        
+    # 创建选择框
+    selection_box = FluentSelectionBox(callback=callback)
+    result = selection_box.exec_()
+    
+    # 如果是新创建的QApplication，退出它
+    if is_new_app:
+        app.quit()
+        
+    return result == QDialog.Accepted
+
+# 为了兼容性，保留原来的名称
+TransparentSelectionBox = FluentSelectionBox
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -186,6 +220,6 @@ if __name__ == "__main__":
         print(f"结束坐标: ({rect.x() + rect.width()}, {rect.y() + rect.height()})")
 
     
-    window = TransparentSelectionBox(on_selection)
+    window = FluentSelectionBox(callback=on_selection)
     window.show() # 显示窗口    
     sys.exit(app.exec()) # 确保程序不会退出

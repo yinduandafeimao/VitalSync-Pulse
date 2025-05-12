@@ -1,0 +1,12 @@
+{
+    "enable_voice": true,
+    "voice": "zh-CN-YunxiNeural",
+    "warning_threshold": 30,
+    "warning_cooldown": 5,
+    "message_templates": {
+        "low_hp": "警告！{name}血量较低，剩余{health}%",
+        "critical_hp": "紧急！{name}血量严重不足，仅剩{health}%",
+        "start_monitor": "监控已启动，开始实时监控队友血量",
+        "stop_monitor": "监控已停止"
+    }
+}
