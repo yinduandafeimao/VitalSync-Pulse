@@ -35,7 +35,7 @@ python -m pip install -r requirements.txt
 ```
 
 主要依赖：
-- PySide6：用于图形界面
+- PySide5：用于图形界面
 - OpenCV (cv2)：用于图像处理
 - NumPy：用于数学计算
 - PaddleOCR：用于文字识别
