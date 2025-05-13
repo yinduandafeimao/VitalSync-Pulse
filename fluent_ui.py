@@ -759,12 +759,15 @@ class MainWindow(FluentWindow):
             new_layout.setContentsMargins(15, 15, 15, 15)
             self.health_bars_frame.setLayout(new_layout) # 设置新布局
         
+        # --- 新增：按血条 y1, x1 坐标对队员进行排序 ---
+        sorted_members = sorted(self.team.members, key=lambda m: (m.y1, m.x1))
+        
         # 添加队友信息卡片
-        for i, member in enumerate(self.team.members):
+        for i, member in enumerate(sorted_members): # 使用排序后的列表
             self.add_health_bar_card(i, member.name, member.profession)
             
         # 如果没有队友，显示提示信息
-        if not self.team.members and self.health_bars_frame.layout() is not None:
+        if not self.team.members and self.health_bars_frame.layout() is not None: # 检查原始列表判断是否有队友
             noMemberLabel = StrongBodyLabel("没有队友信息。请在队员识别页面添加队友。")
             noMemberLabel.setAlignment(Qt.AlignCenter)
             self.health_bars_frame.layout().addWidget(noMemberLabel)
@@ -1831,10 +1834,13 @@ class MainWindow(FluentWindow):
             self.teammateInfoPreview.setText("当前没有队友信息，请先添加或加载队友。")
             return
         
+        # --- 新增：按血条 y1, x1 坐标对队员进行排序 ---
+        sorted_members_for_preview = sorted(self.team.members, key=lambda m: (m.y1, m.x1))
+
         # 修改：body 样式，使用深色文字
         html = "<html><body style='color: #333333;'>" 
         
-        for idx, member in enumerate(self.team.members):
+        for idx, member in enumerate(sorted_members_for_preview): # 使用排序后的列表
             # 修改：卡片样式适应浅色背景
             card_bg = "#ffffff"  # 白色背景
             border = "1px solid #e0e0e0" # 浅灰色边框
@@ -2252,131 +2258,169 @@ class MainWindow(FluentWindow):
             
         print(f"UI线程收到血量更新: {health_data}") # 确认UI线程收到数据
             
-        if not health_data:
-            # 当监控停止或数据为空时，清空或重置UI
-            if hasattr(self, 'team') and self.team.members:
-                for i, member_obj in enumerate(self.team.members):
-                    member_frame = self.health_bars_frame.findChild(QFrame, f"member_card_{i}")
-                    if not member_frame:
-                        print(f"错误: 清理时找不到队员{i+1}的界面元素")
-                        continue
+        # --- 修改：将 health_data 转为字典以便按名称查找 ---
+        health_data_map = {item[0]: (item[1], item[2]) for item in health_data} # name: (health_percentage, is_alive)
 
-                    health_bar = member_frame.findChild(QFrame, f"health_bar_{i}")
-                    value_label = member_frame.findChild(StrongBodyLabel, f"value_label_{i}")
-                    debug_label = member_frame.findChild(QLabel, f"debug_label_{i}")
-
-                    if health_bar:
-                        health_bar.setFixedWidth(0)
-                        health_bar.setStyleSheet("background-color: #555; border-radius: 3px;") # 暗灰色
-                    if value_label:
-                        value_label.setText("0.0%")
-                        value_label.setStyleSheet("color: #777; font-weight: bold; font-size: 15px;")
-                    if debug_label: # 确保QLabel已从QtWidgets导入
-                        debug_label.setText("dbg: --")
+        # --- 修改：获取在UI中按坐标排序的队员列表 ---
+        # 确保 self.team.members 存在且不为空，否则 sorted 可能报错或产生意外结果
+        if not self.team or not self.team.members:
+            # 如果没有队员，但收到了 health_data (不太可能，但作为防御)，或者需要清空
+            # 沿用之前的逻辑：如果 health_data 为空，则清空/重置UI
+            if not health_data:
+                 # 清理所有现有的血条 (如果 self.team.members 为空，这个循环不会执行)
+                # 这里的逻辑需要确保即使 self.team.members 为空，如果UI上之前有残留，也能清理
+                # 这通常由 init_health_bars_ui 在队员列表变空时处理
+                # 为简单起见，如果 self.team.members 为空，我们假设UI也应为空或由 init_health_bars_ui 处理
+                pass # init_health_bars_ui 应该已经处理了无队员的情况
             self.health_bars_frame.update()
-            QApplication.processEvents() # 处理事件确保UI更新
+            QApplication.processEvents()
             return
 
-        # 更新每个队友的血条
-        for i, data in enumerate(health_data):
-            if i >= len(self.team.members):
-                print(f"警告: 血量数据索引 {i} 超出队伍成员数量 {len(self.team.members)}")
-                break
-                
-            name, health_percentage, is_alive = data
+        sorted_ui_members = sorted(self.team.members, key=lambda m: (m.y1, m.x1))
+
+        if not health_data:
+            # 当监控停止或数据为空时，清空或重置UI (针对已排序的UI元素)
+            for ui_idx, member_obj_in_ui in enumerate(sorted_ui_members):
+                member_frame = self.health_bars_frame.findChild(QFrame, f"member_card_{ui_idx}")
+                if not member_frame:
+                    # print(f"错误: 清理时找不到队员 (UI索引 {ui_idx}) 的界面元素")
+                    continue
+
+                health_bar = member_frame.findChild(QFrame, f"health_bar_{ui_idx}")
+                value_label = member_frame.findChild(StrongBodyLabel, f"value_label_{ui_idx}")
+                debug_label = member_frame.findChild(QLabel, f"debug_label_{ui_idx}")
+                name_label = member_frame.findChild(StrongBodyLabel, f"name_label_{ui_idx}")
+
+                if health_bar:
+                    health_bar.setFixedWidth(0)
+                    health_bar.setStyleSheet("background-color: #555; border-radius: 3px;")
+                if value_label:
+                    value_label.setText("0.0%")
+                    value_label.setStyleSheet("color: #777; font-weight: bold; font-size: 15px;")
+                if debug_label:
+                    debug_label.setText("dbg: --")
+                if name_label: # 重置名称标签状态
+                    name_label.setStyleSheet("font-size: 14px; font-weight: bold;") # 恢复默认样式
+            self.health_bars_frame.update()
+            QApplication.processEvents()
+            return
+
+        # --- 修改：遍历按坐标排序的UI队员列表 ---
+        for ui_idx, member_in_ui_order in enumerate(sorted_ui_members):
+            current_member_name = member_in_ui_order.name
             
-            member_frame = self.health_bars_frame.findChild(QFrame, f"member_card_{i}")
+            member_frame = self.health_bars_frame.findChild(QFrame, f"member_card_{ui_idx}")
             if not member_frame:
-                print(f"错误: 更新时找不到队员{i+1} ('{name}') 的界面元素")
+                print(f"错误: 更新时找不到队员 '{current_member_name}' (UI索引 {ui_idx}) 的界面元素 member_card")
                 continue
                 
-            health_bar = member_frame.findChild(QFrame, f"health_bar_{i}")
-            value_label = member_frame.findChild(StrongBodyLabel, f"value_label_{i}")
-            name_label = member_frame.findChild(StrongBodyLabel, f"name_label_{i}")
-            debug_label = member_frame.findChild(QLabel, f"debug_label_{i}")
-            
-            if not health_bar or not value_label:
-                print(f"错误: 队员{i+1} ('{name}') 的血条或数值标签元素缺失")
-                continue
+            health_bar = member_frame.findChild(QFrame, f"health_bar_{ui_idx}")
+            value_label = member_frame.findChild(StrongBodyLabel, f"value_label_{ui_idx}")
+            name_label = member_frame.findChild(StrongBodyLabel, f"name_label_{ui_idx}")
+            debug_label = member_frame.findChild(QLabel, f"debug_label_{ui_idx}")
+
+            if not health_bar or not value_label or not name_label:
+                print(f"错误: 队员 '{current_member_name}' (UI索引 {ui_idx}) 的血条、数值或名称标签元素缺失")
+                # 即使部分组件缺失，也尝试更新其他存在的组件
+                # continue # 移除 continue，尝试更新能找到的组件
+
+            # 检查当前队员是否在传入的 health_data 中
+            if current_member_name not in health_data_map:
+                print(f"UI 更新: 队员 '{current_member_name}' (UI 索引 {ui_idx}) 在当前 health_data 中未找到。设置为N/A状态。")
+                if health_bar:
+                    health_bar.setFixedWidth(0)
+                    health_bar.setStyleSheet("background-color: #555; border-radius: 3px;")
+                if value_label:
+                    value_label.setText("N/A")
+                    value_label.setStyleSheet("color: #777; font-weight: bold; font-size: 15px;")
+                if name_label:
+                    name_label.setText(current_member_name) # 确保名字正确显示
+                    name_label.setStyleSheet("color: #777777; font-size: 14px; font-weight: bold;") # 暗色表示N/A
+                if debug_label:
+                    debug_label.setText("dbg: N/A")
+                continue # 处理下一个UI队员
+
+            # 如果找到了数据，则解包
+            health_percentage, is_alive = health_data_map[current_member_name]
             
             if debug_label:
-                # 确保 self.team.members[i] 存在并且有 health_percentage 属性
-                if i < len(self.team.members) and hasattr(self.team.members[i], 'health_percentage'):
-                    # 显示由 TeamMember.update_health() 计算并存储的血量，用于对比
-                    debug_label.setText(f"内存:{self.team.members[i].health_percentage:.1f}%")
+                # member_in_ui_order 是 TeamMember 对象，它应该有 health_percentage 属性
+                if hasattr(member_in_ui_order, 'health_percentage'):
+                    debug_label.setText(f"内存:{member_in_ui_order.health_percentage:.1f}%")
                 else:
                     debug_label.setText("内存:N/A")
 
             current_hp_from_signal = health_percentage
             
+            # 根据存活状态和血量设置颜色
+            final_color = "#2ecc71" # 默认健康绿色
             if not is_alive:
-                color = "#777777"  # 灰色表示离线/死亡
+                final_color = "#777777"  # 灰色表示离线/死亡
                 current_hp_from_signal = 0.0 # 死亡时血量视为0
             elif current_hp_from_signal <= 30:
-                color = "#e74c3c"  # 红色表示危险
+                final_color = "#e74c3c"  # 红色表示危险
             elif current_hp_from_signal <= 60:
-                color = "#f39c12"  # 黄色表示警告
-            else:
-                color = "#2ecc71"  # 绿色表示健康
+                final_color = "#f39c12"  # 黄色表示警告
             
             SCALE_FACTOR = 3
             MAX_WIDTH = 300 
             
             new_width = min(int(current_hp_from_signal * SCALE_FACTOR), MAX_WIDTH)
-            if new_width < 0: new_width = 0 # 确保宽度不为负
+            if new_width < 0: new_width = 0
             
-            current_stylesheet = health_bar.styleSheet()
-            new_stylesheet = f"background-color: {color}; border-radius: 3px;"
+            if health_bar:
+                current_stylesheet = health_bar.styleSheet()
+                new_stylesheet = f"background-color: {final_color}; border-radius: 3px;"
+                current_bar_width = health_bar.width()
+
+                if abs(current_bar_width - new_width) > 1e-9 or current_stylesheet != new_stylesheet: # 比较浮点数宽度
+                    # print(f"UI更新: 队员 '{current_member_name}' (UI {ui_idx}), 血量: {current_hp_from_signal:.1f}%, 旧宽:{current_bar_width} -> 新宽:{new_width}")
+                    health_bar.setStyleSheet(new_stylesheet)
+                    health_bar.setFixedWidth(new_width)
+                    
+                    parent_widget = health_bar.parentWidget() 
+                    if parent_widget and parent_widget.layout():
+                        parent_widget.layout().invalidate() 
+                        parent_widget.updateGeometry() 
+                    if member_frame: member_frame.update()
             
-            current_bar_width = health_bar.width()
-            # 检查宽度或样式是否有变化
-            if abs(current_bar_width - new_width) > 0 or current_stylesheet != new_stylesheet:
-                print(f"UI更新: 队员{i+1} ({name}), 血量: {current_hp_from_signal:.1f}%, 旧宽:{current_bar_width} -> 新宽:{new_width}, 新样式: {new_stylesheet}")
-                health_bar.setStyleSheet(new_stylesheet)
-                health_bar.setFixedWidth(new_width)
-                
-                parent_widget = health_bar.parentWidget() 
-                if parent_widget and parent_widget.layout():
-                    parent_widget.layout().invalidate() 
-                    parent_widget.updateGeometry() 
-                
-                # 尝试强制更新包含此血条的整个队员卡片
-                if member_frame:
-                    member_frame.update()
-            
-            value_label.setText(f"{current_hp_from_signal:.1f}%")
-            value_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 15px;")
+            if value_label:
+                value_label.setText(f"{current_hp_from_signal:.1f}%")
+                value_label.setStyleSheet(f"color: {final_color}; font-weight: bold; font-size: 15px;")
             
             if name_label:
-                # name_label_text = f"队员 {i+1}" # 保持"队员 X"的格式
-                name_label_text = name # <-- 修改这里，使用 health_data 中的名字
+                name_label_text = current_member_name # 使用来自 UI 顺序的队员名
                 if name_label.text() != name_label_text:
                     name_label.setText(name_label_text)
+                
                 if not is_alive:
                     name_label.setStyleSheet("color: #777777; font-size: 14px; font-weight: bold;")
                 else:
-                    name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+                    # 根据血量设置名字颜色（可选，如果需要更明显的区分）
+                    # if current_hp_from_signal <= 30:
+                    #     name_label.setStyleSheet(f"color: {final_color}; font-size: 14px; font-weight: bold;")
+                    # else:
+                    name_label.setStyleSheet("font-size: 14px; font-weight: bold;") # 默认样式
             
-            # 请求特定小部件的更新可能有助于Qt更有效地重绘
-            health_bar.update()
-            value_label.update()
+            if health_bar: health_bar.update()
+            if value_label: value_label.update()
             if name_label: name_label.update()
             if debug_label: debug_label.update()
-            # member_frame.update() # 更新整个卡片可能太频繁
-            
-        self.health_bars_frame.update() # 更新包含所有血条的父框架
-        QApplication.processEvents() # 确保所有挂起的UI事件被处理
+
+        self.health_bars_frame.update()
+        QApplication.processEvents()
         
-        # 计算低血量队友数量
+        # check_health_warnings 使用原始的 health_data，这部分不需要修改
+        # 因为它关心的是实际的血量数据，而不是UI顺序
         low_hp_count = 0
         total_alive = 0
-        for name, health, is_alive in health_data:
-            if is_alive:
+        # 重新从 health_data_map 的值计算，以确保与UI更新的数据源一致
+        for _, (hp, alive_status) in health_data_map.items():
+            if alive_status:
                 total_alive += 1
-                if health <= 30:  # 使用30%作为低血量标准，与UI颜色一致
+                if hp <= 30: # 使用30%作为低血量标准
                     low_hp_count += 1
         
-        # 调用检查血量警告的函数
         self.check_health_warnings(health_data, low_hp_count, total_alive)
 
     def check_health_warnings(self, health_data, low_hp_count, total_alive):
