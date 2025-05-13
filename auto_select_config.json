@@ -1,10 +1,11 @@
 {
     "auto_select": {
-        "enabled": false,
+        "enabled": true,
         "health_threshold": 85,
         "cooldown_time": 1.0,
         "priority_roles": [
             "罡鬼王"
-        ]
+        ],
+        "priority_profession": "汐灵汐"
     }
 }

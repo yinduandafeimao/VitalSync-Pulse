@@ -2,7 +2,7 @@
     "calibration_sets": {
         "5条血条_05131431": {
             "count": 5,
-            "calibration_time": "2025-05-13 14:33:13",
+            "calibration_time": "2025-05-13 15:04:52",
             "health_bars": [
                 {
                     "x1": 874,
@@ -11,7 +11,7 @@
                     "y2": 421,
                     "recognition_done": true,
                     "name": "英短肥猫",
-                    "profession": "未知"
+                    "profession": "汐灵汐"
                 },
                 {
                     "x1": 875,

@@ -66,6 +66,9 @@ class HealthMonitor:
         self.last_select_time = 0  # 上次自动选择的时间
         self.priority_roles = []  # 优先选择的职业列表
         
+        # 新增：职业优先级
+        self.priority_profession = None  # 默认无优先职业
+        
         # 加载快捷键设置
         self.load_hotkey_config()
         self.load_auto_select_config()  # 加载自动选择配置
@@ -727,6 +730,7 @@ class HealthMonitor:
                     self.health_threshold = auto_select.get('health_threshold', 50.0)
                     self.cooldown_time = auto_select.get('cooldown_time', 2.0)
                     self.priority_roles = auto_select.get('priority_roles', [])
+                    self.priority_profession = auto_select.get('priority_profession', None)
                     print(f"已加载自动选择配置: 启用={self.auto_select_enabled}, 血量阈值={self.health_threshold}, 冷却时间={self.cooldown_time}")
         
         except Exception as e:
@@ -744,7 +748,8 @@ class HealthMonitor:
                     'enabled': self.auto_select_enabled,
                     'health_threshold': self.health_threshold,
                     'cooldown_time': self.cooldown_time,
-                    'priority_roles': self.priority_roles
+                    'priority_roles': self.priority_roles,
+                    'priority_profession': self.priority_profession
                 }
             }
             
@@ -801,8 +806,8 @@ class HealthMonitor:
         # 基础分数：血量百分比
         score = member.health_percentage
         
-        # 如果职业在优先列表中，适当降低分数（提高优先级）
-        if self.priority_roles and member.profession in self.priority_roles:
+        # 如果该队员的职业是当前设置的单个优先职业，则给予分数加成（降低分数以提高优先级）
+        if self.priority_profession and member.profession == self.priority_profession:
             score -= 10  # 优先职业的血量可以高10%也会被优先选择
         
         return score

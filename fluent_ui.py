@@ -700,10 +700,28 @@ class MainWindow(FluentWindow):
             self.autoClickSwitch.setChecked(self.health_monitor.auto_select_enabled)
         else:
             self.autoClickSwitch.setChecked(False) # 默认关闭
+        
+        # 新增：职业优先级下拉框
+        priorityLabel = BodyLabel("优先职业:")
+        self.priorityComboBox = ComboBox()
+        self.priorityComboBox.setFixedWidth(120)
+        # 加载所有职业选项
+        self.load_profession_options()
+        # 设置当前选中值
+        if hasattr(self, 'health_monitor') and hasattr(self.health_monitor, 'priority_profession'):
+            priority_index = self.priorityComboBox.findText(self.health_monitor.priority_profession)
+            if priority_index >= 0:
+                self.priorityComboBox.setCurrentIndex(priority_index)
+        
         # 连接信号
         self.autoClickSwitch.checkedChanged.connect(self.toggle_auto_click_low_health)
+        self.priorityComboBox.currentTextChanged.connect(self.update_priority_profession)
+        
         autoClickLayout.addWidget(autoClickLabel)
         autoClickLayout.addWidget(self.autoClickSwitch)
+        autoClickLayout.addSpacing(20)  # 增加间距
+        autoClickLayout.addWidget(priorityLabel)
+        autoClickLayout.addWidget(self.priorityComboBox)
         autoClickLayout.addStretch(1)
         paramsGroupLayout.addLayout(autoClickLayout) # 添加到参数组布局
         
@@ -725,22 +743,34 @@ class MainWindow(FluentWindow):
         """初始化血条UI显示"""
         if not self.health_bars_frame:
             return
-            
+
         # 清除现有布局中的所有组件
-        for i in reversed(range(self.health_bars_frame.layout().count())):
-            widget = self.health_bars_frame.layout().itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
+        current_layout = self.health_bars_frame.layout()
+        if current_layout is not None:
+            while current_layout.count():
+                item = current_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+        else:
+            # 如果布局不存在，则创建一个新的
+            new_layout = QVBoxLayout(self.health_bars_frame)
+            new_layout.setSpacing(12)
+            new_layout.setContentsMargins(15, 15, 15, 15)
+            self.health_bars_frame.setLayout(new_layout) # 设置新布局
         
         # 添加队友信息卡片
         for i, member in enumerate(self.team.members):
             self.add_health_bar_card(i, member.name, member.profession)
             
         # 如果没有队友，显示提示信息
-        if not self.team.members:
+        if not self.team.members and self.health_bars_frame.layout() is not None:
             noMemberLabel = StrongBodyLabel("没有队友信息。请在队员识别页面添加队友。")
             noMemberLabel.setAlignment(Qt.AlignCenter)
             self.health_bars_frame.layout().addWidget(noMemberLabel)
+        
+        # 添加：强制更新框架，确保UI刷新
+        self.health_bars_frame.update()
     
     def add_health_bar_card(self, index, name, profession):
         """添加血条卡片
@@ -760,15 +790,16 @@ class MainWindow(FluentWindow):
         memberLayout.setSpacing(10)
         
         # 队员编号和名称 - 使用实际名称
-        nameLabel = StrongBodyLabel(name) # <-- 修改这里
+        nameLabel = StrongBodyLabel(name)
         nameLabel.setObjectName(f"name_label_{index}")
         nameLabel.setStyleSheet("font-size: 14px; font-weight: bold;")
         nameLabel.setFixedWidth(80)
         
-        # 角色标签 (奶妈/输出)
-        roleLabel = BodyLabel(profession if profession in ["奶妈", "输出"] else ("奶妈" if "奶" in profession else "输出"))
+        # 修改：直接显示识别到的职业名称
+        roleLabel = BodyLabel(str(profession)) # 确保是字符串
         roleLabel.setStyleSheet("color: #666; font-size: 12px;")
         roleLabel.setFixedWidth(60)
+        roleLabel.setToolTip(str(profession)) # 添加悬浮提示显示完整职业名
         
         # 血条容器
         healthBarContainer = QFrame()
@@ -1259,7 +1290,7 @@ class MainWindow(FluentWindow):
         # 版本信息
         versionLayout = QHBoxLayout()
         versionLabel = BodyLabel("版本:")
-        versionValueLabel = BodyLabel("VitalSync 1.0.0")
+        versionValueLabel = BodyLabel("VitalSync 2.0.0")
         versionLayout.addWidget(versionLabel)
         versionLayout.addWidget(versionValueLabel)
         versionLayout.addStretch(1)
@@ -2061,38 +2092,74 @@ class MainWindow(FluentWindow):
                                        f"</body></html>")
         QApplication.processEvents()  # 立即更新UI
     
-    def update_recognition_results(self, teammates):
-        """更新识别结果显示
+    def update_recognition_results(self, teammates_data):
+        """更新识别结果显示，并更新到队友数据和血条监控界面
         
         参数:
-            teammates: 识别到的队友列表
+            teammates_data: 识别到的队友列表，每个元素是一个包含 'name' 和 'profession' 的字典
         """
         if not hasattr(self, 'teammateInfoPreview'):
             return
             
-        html = "<html><body style='color: white;'>"
+        html = "<html><body style='color: #333333;'>" # 适应浅色背景的文字颜色
         html += "<div style='font-weight: bold; font-size: 16px; margin-bottom: 10px;'>识别结果</div>"
         
-        if not teammates:
+        updated_members_count = 0
+
+        if not teammates_data:
             html += "<div>未识别到任何队友</div>"
         else:
-            for idx, member in enumerate(teammates):
-                # 卡片样式的队友信息区域
-                card_bg = "rgba(30, 144, 255, 0.2)"  # 淡蓝色背景
-                border = "2px solid #3498db"
+            for recognized_data in teammates_data:
+                name = recognized_data.get('name')
+                new_profession = recognized_data.get('profession', '未知') # 获取识别到的职业
+                health_bar_info = recognized_data.get('health_bar', {})
+
+                # 更新到 self.team.members
+                member_updated = False
+                for member_obj in self.team.members:
+                    if member_obj.name == name:
+                        if member_obj.profession != new_profession:
+                            member_obj.profession = new_profession
+                            # 如果需要，这里也可以更新血条坐标等其他识别信息
+                            # member_obj.x1 = health_bar_info.get('x1', member_obj.x1)
+                            # member_obj.y1 = health_bar_info.get('y1', member_obj.y1)
+                            # member_obj.x2 = health_bar_info.get('x2', member_obj.x2)
+                            # member_obj.y2 = health_bar_info.get('y2', member_obj.y2)
+                            member_obj.save_config() # 保存更新后的配置
+                            updated_members_count += 1
+                        member_updated = True
+                        break
                 
-                # 血条位置信息
-                position = f"({member.get('health_bar', {}).get('x1', 0)}, {member.get('health_bar', {}).get('y1', 0)}) - "
-                position += f"({member.get('health_bar', {}).get('x2', 0)}, {member.get('health_bar', {}).get('y2', 0)})"
+                # 如果是识别到的新队友且不在当前队伍中，可以选择是否添加
+                # 为简化，当前逻辑仅更新已有同名队友的职业
+                # if not member_updated:
+                #     # 可以在这里添加逻辑：如果识别到一个全新的队友，是否自动添加到self.team
+                #     # new_member = self.team.add_member(name, new_profession)
+                #     # ... 设置其血条坐标、颜色等 ...
+                #     # new_member.save_config()
+                #     pass # 暂不处理新增，仅更新已有
+
+                # --- HTML 预览部分（保持不变，使用识别到的职业） ---
+                card_bg = "#ffffff"  # 白色背景
+                border = "1px solid #e0e0e0" # 浅灰色边框
                 
-                # 添加队友信息卡片
+                position = f"({health_bar_info.get('x1', 0)}, {health_bar_info.get('y1', 0)}) - "
+                position += f"({health_bar_info.get('x2', 0)}, {health_bar_info.get('y2', 0)})"
+                
+                # 尝试获取职业图标路径 (与 update_teammate_preview 逻辑一致)
+                icon_html = ""
+                profession_icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons", f"{new_profession}.png")
+                if os.path.exists(profession_icon_path):
+                    icon_uri = QUrl.fromLocalFile(profession_icon_path).toString()
+                    icon_html = f"<img src='{icon_uri}' width='24' height='24' style='vertical-align: middle; margin-right: 8px;'/>"
+
                 html += f"""
                 <div style='background: {card_bg}; border: {border}; border-radius: 8px; padding: 10px; margin-bottom: 12px;'>
                     <div style='font-weight: bold; font-size: 16px; margin-bottom: 8px;'>
-                        {member.get('name', '未命名')} <span style='color: #3498db;'>({member.get('profession', '未知')})</span>
+                        {icon_html}{name} <span style='color: #3498db;'>({new_profession})</span>
                     </div>
                     <div style='margin-bottom: 6px;'>
-                        <span style='color: #bbb;'>血条位置:</span> {position}
+                        <span style='color: #666666;'>血条位置:</span> {position}
                     </div>
                 </div>
                 """
@@ -2100,17 +2167,39 @@ class MainWindow(FluentWindow):
         html += "</body></html>"
         self.teammateInfoPreview.setText(html)
         QApplication.processEvents()  # 立即更新UI
+
+        if updated_members_count > 0:
+            InfoBar.success(
+                title='职业信息已更新',
+                content=f'已成功更新 {updated_members_count} 名队友的职业信息。',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2500,
+                parent=self
+            )
+            # 触发依赖职业信息的UI更新
+            self.update_teammate_preview() # 刷新"队员识别"页面的完整预览（如果有其他信息源）
+            self.init_health_bars_ui()   # 刷新"血条监控"页面的血条（角色等信息）
     
     def recognition_finished(self):
         """识别完成后的处理"""
         self.recognition_in_progress = False
-        # 识别完成后刷新队友信息
-        self.load_teammates()
-        self.update_teammate_preview()
+        # 识别完成后刷新队友信息 (这一步会从文件重新加载，可能覆盖上面update_recognition_results中的内存更改)
+        # 因此，update_recognition_results 内部已经保存了配置，这里的 load_teammates 可能不再是必须的，
+        # 或者需要确保 load_teammates 能正确反映刚刚保存的更改。
+        # 为确保一致性，可以先调用 init_health_bars_ui 和 update_teammate_preview，它们使用内存中的 self.team 数据。
+        
+        # self.load_teammates() # 考虑是否移除或调整，因为职业信息已在 update_recognition_results 中更新并保存
+        
+        # 刷新UI以反映任何可能的更改 (即使上面 update_recognition_results 已经更新了部分)
+        self.update_teammate_preview() # 确保队友信息预览是最新的
+        self.init_health_bars_ui()     # 确保血条监控界面是最新的
+
         # 显示识别完成提示
         InfoBar.success(
             title='识别完成',
-            content='队友识别已完成',
+            content='队友识别已完成。',
             orient=Qt.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,
@@ -3495,6 +3584,89 @@ class MainWindow(FluentWindow):
             InfoBar.error(
                 title='统一设置失败',
                 content='未能为任何队友更新血条颜色。',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self
+            )
+
+    def load_profession_options(self):
+        """加载职业图标文件夹中的所有职业作为下拉框选项"""
+        # 确保下拉框存在
+        if not hasattr(self, 'priorityComboBox'):
+            return
+            
+        # 清空当前项
+        self.priorityComboBox.clear()
+        
+        # 添加"无优先"选项
+        self.priorityComboBox.addItem("无优先")
+        
+        # 获取profession_icons文件夹路径
+        profession_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons")
+        
+        # 检查文件夹是否存在
+        if not os.path.exists(profession_path):
+            return
+            
+        # 获取所有图标文件名并排序
+        profession_icons = []
+        for filename in os.listdir(profession_path):
+            if filename.endswith(('.png', '.jpg', '.jpeg')):
+                # 去掉文件扩展名，得到职业名称
+                profession_name = os.path.splitext(filename)[0]
+                profession_icons.append(profession_name)
+                
+        # 排序
+        profession_icons.sort()
+        
+        # 添加到下拉框
+        for profession in profession_icons:
+            self.priorityComboBox.addItem(profession)
+    
+    def update_priority_profession(self, profession):
+        """更新优先职业设置"""
+        if hasattr(self, 'health_monitor'):
+            # 将"无优先"选项转换为None
+            priority = None if profession == "无优先" else profession
+            
+            # 更新健康监控对象的优先职业
+            self.health_monitor.priority_profession = priority
+            
+            # 保存设置
+            self.save_priority_profession_setting()
+            
+            # 更新状态显示
+            status = f"已设置优先职业: {profession}" if priority else "已取消职业优先选择"
+            self.update_monitor_status(status)
+    
+    def save_priority_profession_setting(self):
+        """保存优先职业设置到配置文件"""
+        try:
+            # 获取自动选择配置文件路径
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_select_config.json")
+            
+            # 读取现有配置
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            else:
+                config = {}
+            
+            # 更新配置
+            config['priority_profession'] = self.health_monitor.priority_profession
+            
+            # 保存配置
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+                
+        except Exception as e:
+            print(f"保存优先职业设置失败: {e}")
+            # 显示错误提示
+            InfoBar.error(
+                title='保存失败',
+                content=f'无法保存优先职业设置: {str(e)}',
                 orient=Qt.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
