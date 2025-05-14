@@ -48,6 +48,10 @@ class HealthBarCalibration:
         self.signals = CalibrationSignals()
         self.is_first_run = not os.path.exists(self.calibration_file)
         
+        # 新增：初始化全局默认颜色属性
+        self.default_hp_color_lower = None
+        self.default_hp_color_upper = None
+        
         # 加载校准数据
         self.load_all_calibration_sets()
     
@@ -324,9 +328,14 @@ class HealthBarCalibration:
                 teammate.x2 = x2
                 teammate.y2 = y2
                 
-                # 设置默认的血条颜色范围（降低范围，使检测更精确）
-                teammate.hp_color_lower = np.array([45, 80, 130])
-                teammate.hp_color_upper = np.array([60, 160, 210])
+                # 应用颜色设置
+                if self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                    teammate.hp_color_lower = np.copy(self.default_hp_color_lower)
+                    teammate.hp_color_upper = np.copy(self.default_hp_color_upper)
+                else:
+                    # 如果没有全局默认颜色，则使用硬编码的备用值
+                    teammate.hp_color_lower = np.array([45, 80, 130]) 
+                    teammate.hp_color_upper = np.array([60, 160, 210])
                 
                 # 保存队友配置
                 teammate.save_config()

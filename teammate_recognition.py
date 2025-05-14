@@ -4,9 +4,9 @@ import cv2
 import numpy as np
 import json
 from typing import Tuple, Optional
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QInputDialog, QHBoxLayout, QScrollArea
-from PySide6.QtCore import Qt, QEventLoop, QRect
-from PySide6.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QInputDialog, QHBoxLayout, QScrollArea
+from PyQt5.QtCore import Qt, QEventLoop, QRect
+from PyQt5.QtGui import QImage, QPixmap
 from 选择框 import TransparentSelectionBox
 from paddleocr import PaddleOCR
 import pyautogui

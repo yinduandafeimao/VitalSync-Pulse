@@ -2,7 +2,7 @@
     "calibration_sets": {
         "5条血条_05131712": {
             "count": 5,
-            "calibration_time": "2025-05-13 17:13:18",
+            "calibration_time": "2025-05-14 22:14:24",
             "health_bars": [
                 {
                     "x1": 874,
@@ -10,8 +10,8 @@
                     "x2": 1046,
                     "y2": 421,
                     "recognition_done": true,
-                    "name": "英短肥猫",
-                    "profession": "汐灵汐"
+                    "name": "队友1",
+                    "profession": "未知"
                 },
                 {
                     "x1": 874,
@@ -19,7 +19,7 @@
                     "x2": 1045,
                     "y2": 493,
                     "recognition_done": true,
-                    "name": "鬼王宗弟子",
+                    "name": "队友2",
                     "profession": "未知"
                 },
                 {
@@ -28,7 +28,7 @@
                     "x2": 1045,
                     "y2": 564,
                     "recognition_done": true,
-                    "name": "合欢派弟子",
+                    "name": "队友3",
                     "profession": "未知"
                 },
                 {
@@ -37,7 +37,7 @@
                     "x2": 1045,
                     "y2": 638,
                     "recognition_done": true,
-                    "name": "焚香谷弟子",
+                    "name": "队友信息预览",
                     "profession": "未知"
                 },
                 {
@@ -46,11 +46,158 @@
                     "x2": 1045,
                     "y2": 710,
                     "recognition_done": true,
+                    "name": "队友5",
+                    "profession": "未知"
+                }
+            ]
+        },
+        "10条血条_05142136": {
+            "count": 10,
+            "calibration_time": "2025-05-14 23:30:15",
+            "health_bars": [
+                {
+                    "x1": 59,
+                    "y1": 253,
+                    "x2": 196,
+                    "y2": 325,
+                    "recognition_done": true,
+                    "name": "墨风",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 61,
+                    "y1": 334,
+                    "x2": 197,
+                    "y2": 408,
+                    "recognition_done": true,
+                    "name": "临冬",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 61,
+                    "y1": 416,
+                    "x2": 197,
+                    "y2": 489,
+                    "recognition_done": true,
+                    "name": "深水",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 59,
+                    "y1": 497,
+                    "x2": 198,
+                    "y2": 574,
+                    "recognition_done": true,
+                    "name": "娅翎子",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 60,
+                    "y1": 581,
+                    "x2": 196,
+                    "y2": 651,
+                    "recognition_done": true,
+                    "name": "娇婧",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 208,
+                    "y1": 254,
+                    "x2": 345,
+                    "y2": 326,
+                    "recognition_done": true,
+                    "name": "浮云",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 207,
+                    "y1": 336,
+                    "x2": 346,
+                    "y2": 407,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 206,
+                    "y1": 417,
+                    "x2": 345,
+                    "y2": 489,
+                    "recognition_done": true,
+                    "name": "酷睿睿",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 208,
+                    "y1": 498,
+                    "x2": 346,
+                    "y2": 569,
+                    "recognition_done": true,
+                    "name": "奥王",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 207,
+                    "y1": 580,
+                    "x2": 346,
+                    "y2": 652,
+                    "recognition_done": true,
+                    "name": "三叔",
+                    "profession": "未知"
+                }
+            ]
+        },
+        "5条血条_05142214": {
+            "count": 5,
+            "calibration_time": "2025-05-14 23:18:52",
+            "health_bars": [
+                {
+                    "x1": 1696,
+                    "y1": 494,
+                    "x2": 1885,
+                    "y2": 567,
+                    "recognition_done": true,
+                    "name": "英短肥猫",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 1696,
+                    "y1": 576,
+                    "x2": 1884,
+                    "y2": 648,
+                    "recognition_done": true,
+                    "name": "鬼王宗弟子",
+                    "profession": "罡鬼王"
+                },
+                {
+                    "x1": 1695,
+                    "y1": 655,
+                    "x2": 1884,
+                    "y2": 726,
+                    "recognition_done": true,
+                    "name": "合欢派弟子",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 1695,
+                    "y1": 737,
+                    "x2": 1882,
+                    "y2": 806,
+                    "recognition_done": true,
+                    "name": "焚香谷弟子",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 1695,
+                    "y1": 817,
+                    "x2": 1885,
+                    "y2": 887,
+                    "recognition_done": true,
                     "name": "青云门弟子",
                     "profession": "未知"
                 }
             ]
         }
     },
-    "last_used": "5条血条_05131712"
+    "last_used": "10条血条_05142136"
 }

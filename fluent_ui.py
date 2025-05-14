@@ -140,6 +140,11 @@ class MainWindow(FluentWindow):
         self.team = Team()  # 创建Team实例
         self.selection_box = None # 屏幕选择框
         
+        # 初始化全局默认血条颜色
+        self.default_hp_color_lower = None  # 默认血条颜色下限
+        self.default_hp_color_upper = None  # 默认血条颜色上限
+        self.load_default_colors()  # 从配置加载默认颜色设置
+        
         # 初始化健康监控相关属性
         self.health_monitor = HealthMonitor(self.team)  # 创建健康监控实例
         # 连接监控信号
@@ -1490,6 +1495,13 @@ class MainWindow(FluentWindow):
         # 使用Team类添加队友
         new_member = self.team.add_member(name, profession)
         
+        # 使用全局默认颜色设置(如果有的话)
+        if self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+            import numpy as np
+            new_member.hp_color_lower = np.copy(self.default_hp_color_lower)
+            new_member.hp_color_upper = np.copy(self.default_hp_color_upper)
+            new_member.save_config()  # 保存颜色设置到队员配置文件
+        
         # 更新健康监控
         self.health_monitor.team = self.team
         self.init_health_bars_ui()
@@ -1565,6 +1577,18 @@ class MainWindow(FluentWindow):
         status_label.setStyleSheet("color: blue;")
         info_layout.addWidget(status_label)
         
+        # 添加预览区域
+        preview_layout = QHBoxLayout()
+        preview_label = QLabel("颜色预览：")
+        color_preview = QFrame()
+        color_preview.setFixedSize(50, 20)
+        color_preview.setFrameShape(QFrame.Box)
+        color_preview.setStyleSheet("background-color: transparent;")
+        preview_layout.addWidget(preview_label)
+        preview_layout.addWidget(color_preview)
+        preview_layout.addStretch(1)
+        info_layout.addLayout(preview_layout)
+        
         # 创建一个定时器，用于检查键盘输入
         key_check_timer = QTimer(info_dialog)
         
@@ -1572,7 +1596,7 @@ class MainWindow(FluentWindow):
         color_captured = [False]  # 使用列表包装布尔值，使其可以在嵌套函数中修改
         
         # 定时器回调函数
-        def check_keys():
+        def check_keys_and_position():
             import keyboard
             if keyboard.is_pressed('space'):
                 # 防止重复处理
@@ -1582,10 +1606,35 @@ class MainWindow(FluentWindow):
                 color_captured[0] = True
                 key_check_timer.stop()
                 
-                # 调用TeamMember的set_health_bar_color方法
+                # 获取当前鼠标位置的屏幕像素颜色
                 try:
-                    member.set_health_bar_color()
-                    status_label.setText("状态：成功获取颜色！")
+                    import pyautogui
+                    x, y = pyautogui.position()
+                    pixel_color = pyautogui.screenshot().getpixel((x, y))
+                    
+                    # 显示获取的颜色
+                    color_hex = "#{:02x}{:02x}{:02x}".format(pixel_color[0], pixel_color[1], pixel_color[2])
+                    color_preview.setStyleSheet(f"background-color: {color_hex};")
+                    
+                    # --- 将RGB转换为BGR ---
+                    rgb_tuple = pixel_color[:3]
+                    bgr_values = (rgb_tuple[2], rgb_tuple[1], rgb_tuple[0]) # B, G, R
+                    
+                    # 创建颜色上下限（允许一定范围的变化）- 使用BGR值
+                    import numpy as np
+                    color_lower = np.array([max(0, c - 30) for c in bgr_values], dtype=np.uint8)
+                    color_upper = np.array([min(255, c + 30) for c in bgr_values], dtype=np.uint8)
+                    
+                    # 更新队友的血条颜色设置
+                    member.hp_color_lower = color_lower
+                    member.hp_color_upper = color_upper
+                    
+                    # 保存到配置文件
+                    member.save_config()
+                    
+                    # 注意：单独设置队员颜色时不再保存为全局默认值
+                    
+                    status_label.setText(f"状态：成功获取颜色！RGB: {rgb_tuple}") # 仍然显示RGB给用户
                     status_label.setStyleSheet("color: green; font-weight: bold;")
                     
                     # 设置一个定时器，等待1.5秒后关闭对话框
@@ -1593,17 +1642,31 @@ class MainWindow(FluentWindow):
                     close_timer.setSingleShot(True)
                     close_timer.timeout.connect(info_dialog.accept)
                     close_timer.start(1500)  # 1.5秒
+                    
+                    # 显示成功提示
+                    InfoBar.success(
+                        title='设置成功',
+                        content=f'已设置 {member.name} 的血条颜色',
+                        orient=Qt.Horizontal,
+                        isClosable=True,
+                        position=InfoBarPosition.TOP,
+                        duration=2000,
+                        parent=self
+                    )
+                    
                 except Exception as e:
                     status_label.setText(f"状态：获取颜色失败 - {str(e)}")
                     status_label.setStyleSheet("color: red;")
+                    color_captured[0] = False  # 重置状态，允许重试
+                    key_check_timer.start()  # 重新启动定时器
             
             elif keyboard.is_pressed('esc'):
                 if not color_captured[0]:  # 只有在未捕获颜色时才处理ESC键
                     key_check_timer.stop()
                     info_dialog.reject()
         
-        # 启动定时器，每100毫秒检查一次键盘
-        key_check_timer.timeout.connect(check_keys)
+        # 启动定时器，每100毫秒检查一次键盘和鼠标
+        key_check_timer.timeout.connect(check_keys_and_position)
         key_check_timer.start(100)
         
         # 显示对话框（模态）
@@ -2027,6 +2090,12 @@ class MainWindow(FluentWindow):
                 calibration = calibration_dialog.calibration
                 set_name = calibration_dialog.selected_calibration
                 
+                # 将全局默认血条颜色传递给校准工具（如果有的话）
+                if hasattr(self, 'default_hp_color_lower') and hasattr(self, 'default_hp_color_upper') and \
+                   self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                    calibration.default_hp_color_lower = self.default_hp_color_lower
+                    calibration.default_hp_color_upper = self.default_hp_color_upper
+                
                 # 显示识别进度提示
                 InfoBar.info(
                     title='开始识别',
@@ -2126,11 +2195,15 @@ class MainWindow(FluentWindow):
                     if member_obj.name == name:
                         if member_obj.profession != new_profession:
                             member_obj.profession = new_profession
-                            # 如果需要，这里也可以更新血条坐标等其他识别信息
-                            # member_obj.x1 = health_bar_info.get('x1', member_obj.x1)
-                            # member_obj.y1 = health_bar_info.get('y1', member_obj.y1)
-                            # member_obj.x2 = health_bar_info.get('x2', member_obj.x2)
-                            # member_obj.y2 = health_bar_info.get('y2', member_obj.y2)
+                            
+                            # 如果没有设置过颜色，同时应用默认颜色
+                            if ((member_obj.hp_color_lower is None or len(member_obj.hp_color_lower) == 0) or \
+                                (member_obj.hp_color_upper is None or len(member_obj.hp_color_upper) == 0)) and \
+                               self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                                import numpy as np
+                                member_obj.hp_color_lower = np.copy(self.default_hp_color_lower)
+                                member_obj.hp_color_upper = np.copy(self.default_hp_color_upper)
+                            
                             member_obj.save_config() # 保存更新后的配置
                             updated_members_count += 1
                         member_updated = True
@@ -3418,7 +3491,7 @@ class MainWindow(FluentWindow):
         preview_layout.addStretch(1)
         info_layout.addLayout(preview_layout)
         
-        # 创建一个定时器，用于检查键盘输入和鼠标位置
+        # 创建一个定时器，用于检查键盘输入
         key_check_timer = QTimer(info_dialog)
         
         # 颜色获取状态
@@ -3445,10 +3518,14 @@ class MainWindow(FluentWindow):
                     color_hex = "#{:02x}{:02x}{:02x}".format(pixel_color[0], pixel_color[1], pixel_color[2])
                     color_preview.setStyleSheet(f"background-color: {color_hex};")
                     
-                    # 创建颜色上下限（允许一定范围的变化）
+                    # --- 将RGB转换为BGR ---
+                    rgb_tuple = pixel_color[:3]
+                    bgr_values = (rgb_tuple[2], rgb_tuple[1], rgb_tuple[0]) # B, G, R
+                    
+                    # 创建颜色上下限（允许一定范围的变化）- 使用BGR值
                     import numpy as np
-                    color_lower = np.array([max(0, c - 30) for c in pixel_color[:3]], dtype=np.uint8)
-                    color_upper = np.array([min(255, c + 30) for c in pixel_color[:3]], dtype=np.uint8)
+                    color_lower = np.array([max(0, c - 30) for c in bgr_values], dtype=np.uint8)
+                    color_upper = np.array([min(255, c + 30) for c in bgr_values], dtype=np.uint8)
                     
                     # 更新队友的血条颜色设置
                     member.hp_color_lower = color_lower
@@ -3457,7 +3534,9 @@ class MainWindow(FluentWindow):
                     # 保存到配置文件
                     member.save_config()
                     
-                    status_label.setText(f"状态：成功获取颜色！RGB: {pixel_color[:3]}")
+                    # 注意：单独设置队员颜色时不再保存为全局默认值
+                    
+                    status_label.setText(f"状态：成功获取颜色！RGB: {rgb_tuple}") # 仍然显示RGB给用户
                     status_label.setStyleSheet("color: green; font-weight: bold;")
                     
                     # 设置一个定时器，等待1.5秒后关闭对话框
@@ -3600,14 +3679,21 @@ class MainWindow(FluentWindow):
         if not self.team.members:
             return
 
+        # --- 将RGB转换为BGR ---
+        bgr_values = (pixel_color_rgb[2], pixel_color_rgb[1], pixel_color_rgb[0]) # B, G, R
+
+        # 保存为全局默认值，供新队员使用
+        color_lower = np.array([max(0, c - 30) for c in bgr_values], dtype=np.uint8)
+        color_upper = np.array([min(255, c + 30) for c in bgr_values], dtype=np.uint8)
+        self.default_hp_color_lower = color_lower
+        self.default_hp_color_upper = color_upper
+        self.save_default_colors()  # 保存默认颜色到配置文件
+
         for member in self.team.members:
             try:
-                # 创建颜色上下限（允许一定范围的变化）
-                color_lower = np.array([max(0, c - 30) for c in pixel_color_rgb], dtype=np.uint8)
-                color_upper = np.array([min(255, c + 30) for c in pixel_color_rgb], dtype=np.uint8)
-                
-                member.hp_color_lower = color_lower
-                member.hp_color_upper = color_upper
+                # 创建颜色上下限（允许一定范围的变化） - 使用BGR值
+                member.hp_color_lower = np.copy(color_lower)  # 使用拷贝防止引用共享
+                member.hp_color_upper = np.copy(color_upper)  # 使用拷贝防止引用共享
                 member.save_config()
                 success_count += 1
             except Exception as e:
@@ -3717,6 +3803,43 @@ class MainWindow(FluentWindow):
                 duration=3000,
                 parent=self
             )
+
+    def save_default_colors(self):
+        """保存默认血条颜色设置到配置文件"""
+        if self.default_hp_color_lower is None or self.default_hp_color_upper is None:
+            return
+
+        try:
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_color_config.json")
+            config = {
+                'default_hp_color': {
+                    'lower': self.default_hp_color_lower.tolist(),
+                    'upper': self.default_hp_color_upper.tolist()
+                }
+            }
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+            print(f"默认血条颜色设置已保存到 {config_file}")
+        except Exception as e:
+            print(f"保存默认血条颜色设置失败: {e}")
+
+    def load_default_colors(self):
+        """从配置文件加载默认血条颜色设置"""
+        try:
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_color_config.json")
+            if not os.path.exists(config_file):
+                return  # 如果配置文件不存在，使用 None 作为默认值
+                
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                
+            if 'default_hp_color' in config:
+                import numpy as np
+                self.default_hp_color_lower = np.array(config['default_hp_color']['lower'], dtype=np.uint8)
+                self.default_hp_color_upper = np.array(config['default_hp_color']['upper'], dtype=np.uint8)
+                print(f"已加载默认血条颜色设置")
+        except Exception as e:
+            print(f"加载默认血条颜色设置失败: {e}")
 
 class RecognitionThread(QThread):
     """队友识别线程类"""

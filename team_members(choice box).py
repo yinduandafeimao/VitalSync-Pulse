@@ -8,8 +8,8 @@ import json
 import os
 import sys
 import importlib.util
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QRect
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QRect
 from 选择框 import FluentSelectionBox, show_selection_box, TransparentSelectionBox
 from prettytable import PrettyTable  # 导入PrettyTable库用于美化输出
 
