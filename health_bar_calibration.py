@@ -5,15 +5,17 @@ import cv2
 import numpy as np
 import time
 import importlib.util
+import uuid
+import pyautogui
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QMessageBox, QProgressBar, QFrame, QInputDialog,
-    QListWidget, QListWidgetItem, QAbstractItemView
+    QListWidget, QListWidgetItem, QAbstractItemView, QComboBox, QSpinBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal as Signal, QObject, QRect, QTimer
 from 选择框 import show_selection_box
 from teammate_recognition import TeammateRecognition
-from qfluentwidgets import InfoBar, InfoBarPosition
+from qfluentwidgets import InfoBar, InfoBarPosition, MessageBox
 
 # 动态导入带空格的模块
 module_name = "team_members(choice box)"
@@ -47,6 +49,10 @@ class HealthBarCalibration:
         self.recognition = TeammateRecognition()  # 队友识别工具
         self.signals = CalibrationSignals()
         self.is_first_run = not os.path.exists(self.calibration_file)
+        
+        # 新增：初始化全局默认颜色属性
+        self.default_hp_color_lower = None
+        self.default_hp_color_upper = None
         
         # 加载校准数据
         self.load_all_calibration_sets()
@@ -324,9 +330,14 @@ class HealthBarCalibration:
                 teammate.x2 = x2
                 teammate.y2 = y2
                 
-                # 设置默认的血条颜色范围（降低范围，使检测更精确）
-                teammate.hp_color_lower = np.array([45, 80, 130])
-                teammate.hp_color_upper = np.array([60, 160, 210])
+                # 应用颜色设置
+                if self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                    teammate.hp_color_lower = np.copy(self.default_hp_color_lower)
+                    teammate.hp_color_upper = np.copy(self.default_hp_color_upper)
+                else:
+                    # 如果没有全局默认颜色，则使用硬编码的备用值
+                    teammate.hp_color_lower = np.array([45, 80, 130]) 
+                    teammate.hp_color_upper = np.array([60, 160, 210])
                 
                 # 保存队友配置
                 teammate.save_config()
@@ -362,7 +373,6 @@ class HealthBarCalibration:
             np.ndarray: 截取的图像，失败则返回None
         """
         try:
-            import pyautogui
             screenshot = pyautogui.screenshot(region=(x1, y1, x2-x1, y2-y1))
             return cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
         except Exception as e:
@@ -1090,22 +1100,29 @@ def quick_calibration(parent=None):
     返回:
         bool: 是否成功完成校准
     """
-    # 确保应用已初始化
-    app = ensure_application()
-    
-    # 创建校准工具实例
-    calibration = HealthBarCalibration()
-    
-    # 弹出选择血条数量的对话框
-    num_bars = select_bar_count_dialog(parent)
-    
-    if num_bars <= 0:
-        return False  # 用户取消了操作
-    
-    # 开始校准流程
-    success = calibration.start_calibration(num_bars)
-    
-    return success
+    try:
+        # 确保应用已初始化
+        app = ensure_application()
+        
+        # 创建校准工具实例
+        calibration = HealthBarCalibration()
+        
+        # 弹出选择血条数量的对话框
+        num_teammates = select_bar_count_dialog(parent)
+        
+        if num_teammates <= 0:
+            return False  # 用户取消了操作
+        
+        # 开始校准流程
+        success = calibration.start_calibration(num_teammates)
+        
+        return success
+        
+    except Exception as e:
+        if parent:
+            QMessageBox.critical(parent, "错误", f"快速校准失败: {str(e)}")
+        print(f"快速校准失败: {e}")
+        return False
 
 def select_bar_count_dialog(parent=None):
     """显示血条数量选择对话框(独立版本)

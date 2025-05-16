@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QComboBo
 from PyQt5.QtCore import QTimer, pyqtSignal, QObject, QRect, QEventLoop
 from 选择框 import TransparentSelectionBox
 import json
+import pygetwindow as gw
 
 # 动态导入带空格的模块
 module_name = "Zhu Xian World Health Bar Test(choice box)"
@@ -24,289 +25,240 @@ spec.loader.exec_module(health_bar_module)
 # 从模块中获取需要的函数
 get_hp_percentage = health_bar_module.get_hp_percentage
 
-class MonitorSignals(QObject):
-    """定义监控信号类，用于在线程间传递信号"""
-    update_signal = pyqtSignal(object)  # 更新血量信号，传递队员血量列表
-    status_signal = pyqtSignal(str)   # 状态信号，传递监控状态信息
+class HealthMonitorSignals(QObject):
+    """健康监控信号类"""
+    update_signal = pyqtSignal(list)  # 更新血量数据
+    status_signal = pyqtSignal(str)   # 状态消息
 
 class HealthMonitor:
-    """血条监控类
+    """健康监控类，负责监控游戏中队友血条状态"""
     
-    负责管理血条监控功能，包括设置血条位置、颜色和实时监控。
-    
-    属性:
-        team: 队伍对象，包含所有队员信息
-        monitoring: 是否正在监控
-        monitor_thread: 监控线程
-        update_interval: 监控更新间隔（秒）
-        signals: 监控信号对象
-    """
-    
-    def __init__(self, team):
-        """初始化血条监控
+    def __init__(self, team=None):
+        """初始化健康监控器
         
         参数:
-            team: 队伍对象
+            team: 团队对象，包含所有需要监控的队友
         """
         self.team = team
-        self.monitoring = False
+        self.is_running = False
+        self.update_interval = 0.1  # 默认每100ms更新一次
         self.monitor_thread = None
-        self.update_interval = 0.5  # 默认更新间隔0.5秒
-        self.signals = MonitorSignals()
+        self.health_threshold = 30.0  # 默认低血量阈值（百分比）
+        self.auto_select_enabled = False  # 是否启用自动点击低血量队友
+        self.priority_profession = None  # 优先职业
+        self.signals = HealthMonitorSignals()
         
-        # 快捷键设置（默认值）
-        self.start_monitoring_hotkey = 'f9'
-        self.stop_monitoring_hotkey = 'f10'
-        self.hotkey_handlers = []  # 存储快捷键处理器的引用
-        
-        # 自动选择低血量队友相关设置
-        self.auto_select_enabled = False
-        self.health_threshold = 50.0  # 默认50%以下触发自动选择
-        self.cooldown_time = 2.0  # 默认冷却时间2秒
-        self.last_select_time = 0  # 上次自动选择的时间
-        self.priority_roles = []  # 优先选择的职业列表
-        
-        # 新增：职业优先级
-        self.priority_profession = None  # 默认无优先职业
-        
-        # 加载快捷键设置
-        self.load_hotkey_config()
-        self.load_auto_select_config()  # 加载自动选择配置
-        
-        # 注册全局快捷键
-        self.register_hotkeys()
+        # 加载自动点击配置
+        self.load_auto_select_config()
     
-    def load_hotkey_config(self):
-        """加载快捷键配置"""
+    def load_auto_select_config(self):
+        """加载自动点击配置"""
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "hotkeys_config.json")
+            # 获取配置文件路径
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_select_config.json")
             
-            if not os.path.exists(config_file):
-                # 创建默认配置
-                self.save_hotkey_config()
-                return
-                
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                
-                if 'hotkeys' in config:
-                    hotkeys = config['hotkeys']
-                    self.start_monitoring_hotkey = hotkeys.get('start_monitoring', 'f9')
-                    self.stop_monitoring_hotkey = hotkeys.get('stop_monitoring', 'f10')
-                    print(f"已加载快捷键配置: 开始监控={self.start_monitoring_hotkey}, 停止监控={self.stop_monitoring_hotkey}")
-        
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.auto_select_enabled = config.get('enabled', False)
+                    self.health_threshold = config.get('threshold', 30.0)
+                    self.priority_profession = config.get('priority_profession', None)
         except Exception as e:
-            print(f"加载快捷键配置失败: {str(e)}")
-            # 使用默认值
+            print(f"加载自动点击配置失败: {e}")
     
-    def save_hotkey_config(self):
-        """保存快捷键配置"""
-        temp_file = None
-        
+    def save_auto_select_config(self):
+        """保存自动点击配置"""
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "hotkeys_config.json")
+            # 获取配置文件路径
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_select_config.json")
             
+            # 构造配置
             config = {
-                'hotkeys': {
-                    'start_monitoring': self.start_monitoring_hotkey,
-                    'stop_monitoring': self.stop_monitoring_hotkey
-                }
+                'enabled': self.auto_select_enabled,
+                'threshold': self.health_threshold,
+                'priority_profession': self.priority_profession
             }
             
-            # 使用临时文件保存
-            import uuid
-            temp_file = config_file + f'.tmp.{uuid.uuid4().hex[:8]}'
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            # 保存配置
+            with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
-            
-            # 检查临时文件是否正确创建
-            if not os.path.exists(temp_file):
-                print(f"临时配置文件未能创建: {temp_file}")
-                return False
+        except Exception as e:
+            print(f"保存自动点击配置失败: {e}")
+    
+    def start(self):
+        """启动健康监控"""
+        if self.is_running:
+            return
+        
+        self.is_running = True
+        self.monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+        self.monitor_thread.start()
+        self.signals.status_signal.emit("健康监控已启动")
+    
+    def stop(self):
+        """停止健康监控"""
+        self.is_running = False
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=2.0)  # 等待线程结束，最多2秒
+        self.signals.status_signal.emit("健康监控已停止")
+    
+    def release_resources(self):
+        """释放资源，在应用程序关闭前调用"""
+        self.stop()
+    
+    def _monitoring_loop(self):
+        """监控循环，在独立线程中运行"""
+        last_update_time = 0
+        consecutive_errors = 0
+        max_allowed_errors = 5  # 允许连续出错的最大次数
+        
+        while self.is_running:
+            try:
+                # 检查时间间隔
+                current_time = time.time()
+                if current_time - last_update_time < self.update_interval:
+                    time.sleep(0.01)  # 短暂休眠以避免CPU占用过高
+                    continue
                 
-            # 如果保存成功，替换原文件
-            if os.path.exists(config_file):
-                # 在Windows上，有时需要多次尝试删除文件
-                max_attempts = 3
-                for attempt in range(max_attempts):
+                last_update_time = current_time
+                
+                # 检查是否有队友
+                if not self.team or not self.team.members or len(self.team.members) == 0:
+                    time.sleep(0.5)  # 如果没有队友，就等久一点
+                    continue
+                
+                # 抓取屏幕截图
+                screenshot = pyautogui.screenshot()
+                screenshot_np = np.array(screenshot)
+                screenshot_rgb = cv2.cvtColor(screenshot_np, cv2.COLOR_RGB2BGR)
+                
+                # 检测每个队友的血量
+                health_data = []
+                lowest_health_member = None
+                lowest_health_value = 100.0
+                
+                for member in self.team.members:
                     try:
-                        os.remove(config_file)
-                        break
+                        # 确保有血条位置
+                        if not hasattr(member, 'x1') or not hasattr(member, 'y1') or \
+                           not hasattr(member, 'x2') or not hasattr(member, 'y2') or \
+                           member.x1 is None or member.y1 is None or \
+                           member.x2 is None or member.y2 is None:
+                            continue
+                        
+                        # 获取血条区域
+                        x1, y1, x2, y2 = int(member.x1), int(member.y1), int(member.x2), int(member.y2)
+                        health_bar_region = screenshot_rgb[y1:y2, x1:x2]
+                        
+                        if health_bar_region.size == 0:
+                            continue  # 跳过无效区域
+                        
+                        # 确定血条颜色范围
+                        has_custom_color = hasattr(member, 'hp_color_lower') and hasattr(member, 'hp_color_upper') and \
+                                         member.hp_color_lower is not None and member.hp_color_upper is not None
+                        
+                        if has_custom_color:
+                            # 使用自定义颜色范围
+                            lower_bound = member.hp_color_lower
+                            upper_bound = member.hp_color_upper
+                        else:
+                            # 使用默认颜色范围（绿色）
+                            lower_bound = np.array([50, 100, 50])
+                            upper_bound = np.array([90, 255, 90])
+                        
+                        # 创建掩码，识别血条颜色
+                        mask = cv2.inRange(health_bar_region, lower_bound, upper_bound)
+                        
+                        # 计算血量百分比
+                        health_pixels = cv2.countNonZero(mask)
+                        total_pixels = health_bar_region.shape[0] * health_bar_region.shape[1]
+                        health_percentage = (health_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+                        
+                        # 存储血量数据
+                        member_data = {
+                            'name': member.name,
+                            'health': health_percentage,
+                            'profession': getattr(member, 'profession', '未知'),
+                            'x1': x1,
+                            'y1': y1,
+                            'x2': x2,
+                            'y2': y2
+                        }
+                        health_data.append(member_data)
+                        
+                        # 检查是否是血量最低的队友
+                        if health_percentage < lowest_health_value:
+                            # 如果设置了优先职业且当前队友职业匹配
+                            if self.priority_profession is None or \
+                               (hasattr(member, 'profession') and \
+                                member.profession == self.priority_profession):
+                                lowest_health_value = health_percentage
+                                lowest_health_member = member
                     except Exception as e:
-                        print(f"尝试 {attempt+1}/{max_attempts} 删除原配置文件失败: {str(e)}")
-                        time.sleep(0.1)
-                        if attempt == max_attempts - 1:  # 最后一次尝试
-                            print(f"无法删除原配置文件，将尝试直接重命名")
-            
-            # 重命名临时文件为正式配置文件
-            try:
-                os.rename(temp_file, config_file)
-            except Exception as e:
-                print(f"重命名临时文件失败: {str(e)}")
-                # 如果重命名失败，但临时文件存在，尝试复制内容
-                if os.path.exists(temp_file):
-                    try:
-                        with open(temp_file, 'r', encoding='utf-8') as src:
-                            content = src.read()
-                        with open(config_file, 'w', encoding='utf-8') as dest:
-                            dest.write(content)
-                        print(f"通过复制内容方式保存配置")
-                        # 尝试删除临时文件
-                        try:
-                            os.remove(temp_file)
-                        except:
-                            pass
-                    except Exception as copy_err:
-                        print(f"复制配置内容失败: {str(copy_err)}")
-                        return False
-                else:
-                    return False
-            
-            print(f"已成功保存快捷键配置到: {config_file}")
-            return True
-            
-        except Exception as e:
-            print(f"保存快捷键配置失败: {str(e)}")
-            # 如果临时文件存在，清理它
-            if temp_file and os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-            return False
-    
-    def register_hotkeys(self):
-        """注册全局快捷键"""
-        try:
-            # 清除之前的快捷键监听器
-            self.unregister_hotkeys()
-            
-            # 等待一小段时间，确保旧的快捷键已经被完全注销
-            time.sleep(0.2)
-            
-            # 存储快捷键的引用，以便于后续注销
-            self.hotkey_handlers = []
-            
-            # 注册开始监控快捷键
-            try:
-                start_handler = keyboard.add_hotkey(
-                    self.start_monitoring_hotkey, 
-                    self.start_monitoring, 
-                    suppress=False  # 不阻止按键传递给其他应用程序
-                )
-                self.hotkey_handlers.append(start_handler)
-                print(f"已注册开始监控快捷键: {self.start_monitoring_hotkey}")
-            except Exception as e:
-                print(f"注册开始监控快捷键失败: {str(e)}")
-                return False
-            
-            # 注册停止监控快捷键
-            try:
-                stop_handler = keyboard.add_hotkey(
-                    self.stop_monitoring_hotkey, 
-                    self.stop_monitoring, 
-                    suppress=False  # 不阻止按键传递给其他应用程序
-                )
-                self.hotkey_handlers.append(stop_handler)
-                print(f"已注册停止监控快捷键: {self.stop_monitoring_hotkey}")
-            except Exception as e:
-                print(f"注册停止监控快捷键失败: {str(e)}")
-                # 如果第二个注册失败，注销第一个
-                if len(self.hotkey_handlers) > 0:
-                    try:
-                        keyboard.unhook(self.hotkey_handlers[0])
-                    except:
-                        pass
-                return False
-            
-            self.signals.status_signal.emit(f"已注册快捷键: 开始监控={self.start_monitoring_hotkey}, 停止监控={self.stop_monitoring_hotkey}")
-            print(f"已成功注册所有快捷键: 开始监控={self.start_monitoring_hotkey}, 停止监控={self.stop_monitoring_hotkey}")
-            return True
-            
-        except Exception as e:
-            self.signals.status_signal.emit(f"注册快捷键失败: {str(e)}")
-            print(f"注册快捷键失败: {str(e)}")
-            return False
-    
-    def unregister_hotkeys(self):
-        """注销全局快捷键"""
-        try:
-            # 注销之前存储的快捷键处理器
-            if hasattr(self, 'hotkey_handlers') and self.hotkey_handlers:
-                for handler in self.hotkey_handlers:
-                    try:
-                        keyboard.unhook(handler)
-                    except:
-                        pass
-                self.hotkey_handlers = []
-                print("已注销所有快捷键")
-            
-            # 尝试清除指定热键
-            try:
-                # 尝试直接使用remove_hotkey方法（如果存在）
-                if hasattr(keyboard, 'remove_hotkey'):
-                    keyboard.remove_hotkey(self.start_monitoring_hotkey)
-                    keyboard.remove_hotkey(self.stop_monitoring_hotkey)
-                # 或者通过_listener访问（如果存在）
-                elif hasattr(keyboard, '_listener') and hasattr(keyboard._listener, 'remove_hotkey'):
-                    keyboard._listener.remove_hotkey(self.start_monitoring_hotkey)
-                    keyboard._listener.remove_hotkey(self.stop_monitoring_hotkey)
-            except:
-                # 忽略可能的错误
-                pass
+                        # 忽略单个队友处理错误，继续处理其他队友
+                        print(f"处理队友 {member.name} 时发生错误: {e}")
                 
-        except Exception as e:
-            print(f"注销快捷键失败: {str(e)}")
-            # 即使失败也不抛出异常，让程序可以继续运行
+                # 发送血量数据更新信号
+                if health_data:
+                    self.signals.update_signal.emit(health_data)
+                    consecutive_errors = 0  # 重置错误计数
+                    
+                    # 检查是否需要自动点击低血量队友
+                    if self.auto_select_enabled and lowest_health_member and lowest_health_value < self.health_threshold:
+                        self._auto_click_low_health_member(lowest_health_member)
+            
+            except Exception as e:
+                consecutive_errors += 1
+                error_msg = f"监控循环发生错误: {e}"
+                print(error_msg)
+                self.signals.status_signal.emit(error_msg)
+                
+                # 如果连续多次出错，暂停监控
+                if consecutive_errors >= max_allowed_errors:
+                    error_msg = f"连续 {max_allowed_errors} 次出错，监控已暂停"
+                    print(error_msg)
+                    self.signals.status_signal.emit(error_msg)
+                    self.is_running = False
+                    break
+                    
+                time.sleep(1)  # 出错后等待一秒再继续
     
-    def set_hotkeys(self, start_key, stop_key):
-        """设置新的快捷键
+    def _auto_click_low_health_member(self, member):
+        """自动点击低血量队友
         
         参数:
-            start_key: 开始监控的快捷键
-            stop_key: 停止监控的快捷键
-            
-        返回:
-            bool: 是否设置成功
+            member: 血量低的队友对象
         """
         try:
-            # 检查快捷键是否有效
-            if not start_key or not stop_key:
-                self.signals.status_signal.emit("快捷键不能为空")
-                return False
+            # 确保有血条位置
+            if not hasattr(member, 'x1') or not hasattr(member, 'y1') or \
+               not hasattr(member, 'x2') or not hasattr(member, 'y2') or \
+               member.x1 is None or member.y1 is None or \
+               member.x2 is None or member.y2 is None:
+                return
             
-            # 先注销当前的快捷键
-            self.unregister_hotkeys()
+            # 计算血条中心位置
+            click_x = int((member.x1 + member.x2) / 2)
+            click_y = int((member.y1 + member.y2) / 2)
             
-            # 等待一小段时间，确保旧的快捷键已经被完全注销
-            QApplication.processEvents()  # 处理等待的事件
-            time.sleep(0.3)
-            
-            # 保存新的快捷键设置
-            self.start_monitoring_hotkey = start_key
-            self.stop_monitoring_hotkey = stop_key
-            
-            # 保存到配置文件
-            success = self.save_hotkey_config()
-            if not success:
-                self.signals.status_signal.emit("保存快捷键配置失败")
-                return False
-            
-            # 重新注册快捷键
-            success = self.register_hotkeys()
-            if not success:
-                self.signals.status_signal.emit("注册新快捷键失败")
-                return False
-            
-            self.signals.status_signal.emit(f"快捷键设置已更新: 开始监控={start_key}, 停止监控={stop_key}")
-            return True
-            
+            # 检查是否在屏幕内
+            screen_width, screen_height = pyautogui.size()
+            if 0 <= click_x < screen_width and 0 <= click_y < screen_height:
+                # 执行点击操作
+                current_x, current_y = pyautogui.position()  # 保存当前鼠标位置
+                pyautogui.click(click_x, click_y)
+                pyautogui.moveTo(current_x, current_y)  # 恢复鼠标位置
+                
+                # 记录点击信息
+                status_msg = f"已自动点击血量低于 {self.health_threshold}% 的队友: {member.name}"
+                print(status_msg)
+                self.signals.status_signal.emit(status_msg)
+                
+                # 点击后暂停一段时间，避免连续点击
+                time.sleep(2.0)
         except Exception as e:
-            self.signals.status_signal.emit(f"设置快捷键失败: {str(e)}")
-            return False
-            
+            print(f"自动点击队友时发生错误: {e}")
+
     def select_member_dialog(self):
         """创建队员选择对话框
         
@@ -594,376 +546,3 @@ class HealthMonitor:
             
             return True
         return False
-    
-    def start_monitoring(self):
-        """开始监控"""
-        # 如果已经在监控中，只显示消息不做其他操作
-        if self.monitoring:
-            import inspect
-            caller_frame = inspect.currentframe().f_back
-            caller_name = caller_frame.f_code.co_name if caller_frame else ""
-            if 'record_hook' in caller_name or caller_name == "":
-                self.signals.status_signal.emit("监控已经在运行中")
-            return False
-        
-        if not self.team.members:
-            self.signals.status_signal.emit("没有队员可以监控")
-            return False
-        
-        incomplete_members = []
-        for member in self.team.members:
-            if member.x1 == 100 and member.y1 == 100 and member.x2 == 300 and member.y2 == 120:
-                incomplete_members.append(f"{member.name} (未设置血条位置)")
-        
-        if incomplete_members:
-            message = "以下队员设置不完整，请先完成设置:\n" + "\n".join(incomplete_members)
-            self.signals.status_signal.emit(message)
-            return False
-        
-        self.monitoring = True
-        self.monitor_thread = threading.Thread(target=self._monitor_loop)
-        self.monitor_thread.daemon = True
-        self.monitor_thread.start()
-        
-        self.signals.status_signal.emit("监控已启动")
-        
-        # 尝试立即获取并发送一次初始血量数据
-        try:
-            print("监控启动后，尝试立即发送初始血量数据...")
-            initial_results = self.team.update_all_health()
-            print(f"获取到的初始血量数据: {initial_results}")
-            self.signals.update_signal.emit(initial_results)
-        except Exception as e:
-            print(f"发送初始血量数据时出错: {str(e)}")
-            self.signals.status_signal.emit(f"发送初始血量失败: {str(e)}")
-            
-        try:
-            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
-            if main_window and hasattr(main_window, 'play_speech'):
-                main_window.play_speech("监控已启动，开始实时跟踪队友状态")
-        except Exception as e:
-            print(f"播放开始监控语音提示失败: {str(e)}")
-            
-        return True
-    
-    def stop_monitoring(self):
-        """停止监控"""
-        # 如果没有在监控中，只显示消息不做其他操作
-        if not self.monitoring:
-            # 只在通过快捷键触发时显示消息（减少重复消息）
-            import inspect
-            caller_frame = inspect.currentframe().f_back
-            caller_name = caller_frame.f_code.co_name if caller_frame else ""
-            if 'record_hook' in caller_name or caller_name == "":  # 由快捷键触发
-                self.signals.status_signal.emit("监控未在运行")
-            return False
-        
-        self.monitoring = False
-        if self.monitor_thread:
-            self.monitor_thread.join(timeout=1.0)
-            self.monitor_thread = None
-        
-        # 发送清除监控日志的信号和状态信号
-        self.signals.update_signal.emit([])
-        self.signals.status_signal.emit("监控已停止")
-        
-        # 播放语音提示（如果主窗口有TTS功能）
-        try:
-            # 尝试获取主窗口对象并播放语音
-            main_window = next((obj for obj in QApplication.topLevelWidgets() if isinstance(obj, QMainWindow)), None)
-            if main_window and hasattr(main_window, 'play_speech'):
-                main_window.play_speech("监控已停止")
-        except Exception as e:
-            print(f"播放停止监控语音提示失败: {str(e)}")
-            
-        return True
-    
-    def release_resources(self):
-        """释放资源，确保程序关闭时正确清理"""
-        print("开始释放资源...")
-        
-        # 注销所有快捷键
-        try:
-            print("正在注销快捷键...")
-            self.unregister_hotkeys()
-            print("快捷键注销完成")
-        except Exception as e:
-            print(f"注销快捷键时出错: {str(e)}")
-        
-        # 停止监控
-        try:
-            if self.monitoring:
-                print("正在停止监控...")
-                # 直接设置标志而不调用stop_monitoring方法，避免发送不必要的信号
-                self.monitoring = False
-                if self.monitor_thread and self.monitor_thread.is_alive():
-                    print("等待监控线程结束...")
-                    self.monitor_thread.join(timeout=2.0)
-                    if self.monitor_thread.is_alive():
-                        print("监控线程未能在指定时间内结束")
-                    else:
-                        print("监控线程已结束")
-                self.monitor_thread = None
-                print("监控已停止")
-        except Exception as e:
-            print(f"停止监控时出错: {str(e)}")
-            
-        print("资源释放完成")
-    
-    def load_auto_select_config(self):
-        """加载自动选择配置"""
-        try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "auto_select_config.json")
-            
-            if not os.path.exists(config_file):
-                # 创建默认配置
-                self.save_auto_select_config()
-                return
-                
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                
-                if 'auto_select' in config:
-                    auto_select = config['auto_select']
-                    self.auto_select_enabled = auto_select.get('enabled', False)
-                    self.health_threshold = auto_select.get('health_threshold', 50.0)
-                    self.cooldown_time = auto_select.get('cooldown_time', 2.0)
-                    self.priority_roles = auto_select.get('priority_roles', [])
-                    self.priority_profession = auto_select.get('priority_profession', None)
-                    print(f"已加载自动选择配置: 启用={self.auto_select_enabled}, 血量阈值={self.health_threshold}, 冷却时间={self.cooldown_time}")
-        
-        except Exception as e:
-            print(f"加载自动选择配置失败: {str(e)}")
-            # 使用默认值
-    
-    def save_auto_select_config(self):
-        """保存自动选择配置"""
-        try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "auto_select_config.json")
-            
-            config = {
-                'auto_select': {
-                    'enabled': self.auto_select_enabled,
-                    'health_threshold': self.health_threshold,
-                    'cooldown_time': self.cooldown_time,
-                    'priority_roles': self.priority_roles,
-                    'priority_profession': self.priority_profession
-                }
-            }
-            
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-            
-            print(f"已成功保存自动选择配置")
-            return True
-            
-        except Exception as e:
-            print(f"保存自动选择配置失败: {str(e)}")
-            return False
-    
-    def set_auto_select_settings(self, enabled, threshold, cooldown, priority_roles):
-        """设置自动选择参数
-        
-        参数:
-            enabled (bool): 是否启用自动选择
-            threshold (float): 血量阈值
-            cooldown (float): 冷却时间
-            priority_roles (list): 优先职业列表
-        """
-        self.auto_select_enabled = enabled
-        self.health_threshold = threshold
-        self.cooldown_time = cooldown
-        self.priority_roles = priority_roles
-        
-        # 保存配置
-        success = self.save_auto_select_config()
-        if success:
-            self.signals.status_signal.emit(f"自动选择设置已更新: 启用={enabled}, 血量阈值={threshold}%, 冷却时间={cooldown}秒")
-        else:
-            self.signals.status_signal.emit(f"自动选择设置已更新，但保存配置失败")
-        
-        return success
-    
-    def check_right_button(self):
-        """检查鼠标右键状态
-        
-        返回:
-            bool: 右键是否按下
-        """
-        return win32api.GetKeyState(win32con.VK_RBUTTON) < 0  # 负值表示按键被按下
-    
-    def get_priority_score(self, member):
-        """计算队友的优先级分数
-        
-        参数:
-            member (TeamMember): 队友对象
-            
-        返回:
-            float: 优先级分数，值越小优先级越高
-        """
-        # 基础分数：血量百分比
-        score = member.health_percentage
-        
-        # 如果该队员的职业是当前设置的单个优先职业，则给予分数加成（降低分数以提高优先级）
-        if self.priority_profession and member.profession == self.priority_profession:
-            score -= 10  # 优先职业的血量可以高10%也会被优先选择
-        
-        return score
-    
-    def auto_select_low_health(self):
-        """自动选择低血量队友"""
-        # 如果功能未启用或正在冷却中，直接返回
-        if not self.auto_select_enabled:
-            return
-            
-        current_time = time.time()
-        if current_time - self.last_select_time < self.cooldown_time:
-            return
-            
-        # 如果鼠标右键正在按下，不执行自动选择
-        if self.check_right_button():
-            return
-            
-        # 筛选血量低于阈值的存活队友（必须是存活状态且血量大于0）
-        low_health_members = [member for member in self.team.members 
-                             if member.is_alive and member.health_percentage > 0 and 
-                             member.health_percentage < self.health_threshold]
-                             
-        if not low_health_members:
-            return  # 没有低血量队友
-            
-        # 根据优先级规则排序
-        low_health_members.sort(key=self.get_priority_score)
-        
-        # 选择优先级最高的队友
-        target_member = low_health_members[0]
-        
-        # 记录当前鼠标位置
-        original_x, original_y = pyautogui.position()
-        
-        try:
-            # 计算血条中心点
-            target_x = (target_member.x1 + target_member.x2) // 2
-            target_y = (target_member.y1 + target_member.y2) // 2
-            
-            # 移动鼠标并点击
-            pyautogui.moveTo(target_x, target_y, duration=0.1)
-            pyautogui.click()
-            
-            # 更新最后选择时间
-            self.last_select_time = current_time
-            
-            # 记录日志
-            self.signals.status_signal.emit(f"自动选择了 {target_member.name} (血量: {target_member.health_percentage:.1f}%)")
-            
-            # 返回原始鼠标位置
-            pyautogui.moveTo(original_x, original_y, duration=0.1)
-            
-        except Exception as e:
-            print(f"自动选择队友时出错: {str(e)}")
-            # 确保鼠标返回原位
-            try:
-                pyautogui.moveTo(original_x, original_y, duration=0.1)
-            except:
-                pass
-    
-    def _monitor_loop(self):
-        """监控循环，在单独的线程中运行"""
-        error_count = 0  # 错误计数器
-        max_errors = 3   # 最大允许错误次数
-        
-        # 添加调试输出
-        print("监控线程已启动")
-        
-        while self.monitoring:
-            try:
-                # 更新所有队员的血量
-                results = self.team.update_all_health()
-                
-                # 调试输出
-                print(f"监控线程获取到血量数据: {results}")
-                
-                # 发送更新信号 - 确保在UI线程中使用正确格式的数据
-                # 确保数据是元组列表格式: [(名称, 血量百分比, 是否存活), ...]
-                self.signals.update_signal.emit(results)
-                
-                # 检查是否有队员血量低于警戒值
-                low_health_members = []
-                for name, hp, is_alive in results:
-                    if is_alive and hp < 30:  # 血量低于30%发出警告
-                        low_health_members.append(f"{name}({hp:.1f}%)")
-                
-                if low_health_members:
-                    warning_msg = f"警告: {', '.join(low_health_members)} 血量低于30%!"
-                    self.signals.status_signal.emit(warning_msg)
-                
-                # 尝试执行自动选择
-                self.auto_select_low_health()
-                
-                # 重置错误计数
-                error_count = 0
-                
-                # 等待指定的间隔时间
-                time.sleep(self.update_interval)
-                
-            except Exception as e:
-                error_count += 1
-                error_msg = f"监控出错 ({error_count}/{max_errors}): {str(e)}"
-                print(error_msg)  # 同时输出到控制台便于调试
-                self.signals.status_signal.emit(error_msg)
-                
-                # 如果连续错误次数超过阈值，停止监控
-                if error_count >= max_errors:
-                    self.signals.status_signal.emit("由于连续错误，监控已自动停止")
-                    self.monitoring = False
-                    break
-                
-                # 出错后等待稍长时间再重试
-                time.sleep(1.0)
-        
-        # 线程结束时发送状态更新
-        print("监控线程已结束")
-        self.signals.status_signal.emit("监控线程已结束")
-
-    def capture_health_bar(self, member):
-        """截取指定队友的血条区域
-        
-        参数:
-            member: TeamMember对象
-            
-        返回:
-            numpy.ndarray: 血条区域的截图
-        """
-        try:
-            # 获取血条区域坐标
-            x1, y1 = member.x1, member.y1
-            x2, y2 = member.x2, member.y2
-            
-            # 将坐标向内收缩1-2像素，避免包含边框
-            x1 += 2
-            y1 += 2
-            x2 -= 2
-            y2 -= 2
-            
-            # 确保区域大小合理
-            if x2 <= x1 or y2 <= y1:
-                print(f"警告: {member.name}的血条区域无效: ({x1}, {y1}, {x2}, {y2})")
-                return None
-            
-            # 计算宽度和高度
-            width = x2 - x1
-            height = y2 - y1
-            
-            # 使用pyautogui截取屏幕指定区域
-            screenshot = pyautogui.screenshot(region=(x1, y1, width, height))
-            
-            # 转换为OpenCV格式(BGR)
-            frame = np.array(screenshot)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            
-            return frame
-        except Exception as e:
-            print(f"截取{member.name}的血条区域时出错: {str(e)}")
-            return None
