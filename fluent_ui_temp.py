@@ -2634,41 +2634,6 @@ class MainWindow(FluentWindow):
         # 退出 pygame mixer
         pygame.mixer.quit()
 
-        # --- 新增：关闭程序时清空队员配置 ---
-        print("关闭程序：正在尝试清空所有队员配置...")
-        try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            if self.team and hasattr(self.team, 'members'):
-                members_to_delete = list(self.team.members) # Iterate over a copy
-                deleted_config_files_count = 0
-                for member in members_to_delete:
-                    if hasattr(member, 'name'):
-                        config_filename = f'{member.name}_config.json'
-                        config_path = os.path.join(current_dir, config_filename)
-                        if os.path.exists(config_path):
-                            try:
-                                os.remove(config_path)
-                                print(f"已删除配置文件: {config_path}")
-                                deleted_config_files_count += 1
-                            except Exception as e_remove:
-                                print(f"删除配置文件 {config_path} 失败: {e_remove}")
-                
-                if deleted_config_files_count > 0:
-                    print(f"共删除了 {deleted_config_files_count} 个队员的配置文件。")
-                
-                # 清空队伍列表
-                self.team.members = []
-                print("内存中的队员列表已清空。")
-
-                # 更新健康监控中的队伍引用 (如果 health_monitor 还存在)
-                if hasattr(self, 'health_monitor') and self.health_monitor:
-                    self.health_monitor.team = self.team
-            else:
-                print("没有队伍或队员列表无法访问，跳过清空配置。")
-        except Exception as e:
-            print(f"清空队员配置过程中发生错误: {str(e)}")
-        # --- 清空队员配置结束 ---
-
         # 调用父类方法
         super().closeEvent(event)
 
