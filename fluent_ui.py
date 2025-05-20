@@ -14,11 +14,12 @@ import queue # 新增导入
 # from playsound import playsound
 # 添加 pygame 导入
 import pygame
-from PyQt5.QtCore import Qt, QTimer, QByteArray, QBuffer, QIODevice, QPoint, QSize, QRect, QThread, pyqtSignal, QObject, QEvent, QUrl
+from PyQt5.QtCore import Qt, QTimer, QByteArray, QBuffer, QIODevice, QPoint, QSize, QRect, QThread, pyqtSignal, QObject, QEvent, QUrl, QPropertyAnimation
 from PyQt5.QtGui import QPixmap, QImage, QIcon, QColor, QFont, QKeySequence, QDesktopServices
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QFileDialog, QFrame, QGridLayout, QSplitter, QTabWidget, QGroupBox,
-                            QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView)
+                            QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView,
+                            QGraphicsDropShadowEffect)
 
 # 导入Fluent组件库
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, PushButton, 
@@ -2168,6 +2169,8 @@ class MainWindow(FluentWindow):
             # 导入校准工具
             from health_bar_calibration import HealthBarCalibration
             calibration = HealthBarCalibration()
+            print("\n=== 开始血条识别流程 ===")
+            print(f"校准对象创建完成，可用校准集: {calibration.get_calibration_set_names()}")
             
             # 创建自定义选择对话框
             try:
@@ -2195,6 +2198,7 @@ class MainWindow(FluentWindow):
                 result = calibration_dialog.exec()
                 print(f"对话框结果: {result}")
                 if not result:
+                    print("用户取消了对话框")
                     return
             except Exception as exec_err:
                 print(f"显示对话框时出错: {exec_err}")
@@ -2214,12 +2218,14 @@ class MainWindow(FluentWindow):
                 return
                 
             print(f"选择的校准数据集: {calibration_dialog.selected_calibration}")
+            print(f"校准对象的当前状态: current_set_name={calibration.current_set_name}, health_bars数量={len(calibration.health_bars) if calibration.health_bars else 0}")
             
             # 将全局默认血条颜色传递给校准工具（如果有的话）
             if hasattr(self, 'default_hp_color_lower') and hasattr(self, 'default_hp_color_upper') and \
                self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
                 calibration.default_hp_color_lower = self.default_hp_color_lower
                 calibration.default_hp_color_upper = self.default_hp_color_upper
+                print("已设置默认血条颜色")
             
             # 显示识别进度提示
             self.show_safe_infobar(
@@ -2239,11 +2245,13 @@ class MainWindow(FluentWindow):
             
             # 进行队友识别
             self.recognition_in_progress = True
+            print(f"创建识别线程，校准集名称: {calibration_dialog.selected_calibration}")
             self.recognition_thread = RecognitionThread(calibration, calibration_dialog.selected_calibration)
             self.recognition_thread.progress_signal.connect(self.update_recognition_progress)
             self.recognition_thread.result_signal.connect(self.update_recognition_results)
             self.recognition_thread.finished.connect(self.recognition_finished)
             self.recognition_thread.start()
+            print("识别线程已启动")
         
         except Exception as e:
             # 处理识别过程中的异常
@@ -3860,8 +3868,15 @@ class RecognitionThread(QThread):
         """线程主函数，执行识别任务"""
         try:
             # 加载校准数据
+            print(f"开始加载校准集: {self.set_name}")
             self.calibration.load_calibration(self.set_name)
             health_bars = self.calibration.health_bars
+            
+            # 打印血条信息，检查是否正确加载
+            print(f"加载到 {len(health_bars)} 个血条位置:")
+            for i, bar in enumerate(health_bars):
+                print(f"血条 {i+1}: x1={bar.get('x1')}, y1={bar.get('y1')}, x2={bar.get('x2')}, y2={bar.get('y2')}")
+            
             results = []
             
             # 循环识别每个血条区域
@@ -3893,12 +3908,17 @@ class RecognitionThread(QThread):
             # 如果没有被中断，发送完整结果
             if not self.isInterruptionRequested():
                 # 实际执行识别
+                print("开始执行队友识别...")
                 teammates = self.calibration.recognize_teammates()
+                print(f"识别完成，返回 {len(teammates) if teammates else 0} 个队友信息")
                 # 发送结果信号
                 self.result_signal.emit(teammates if teammates else results)
         
         except Exception as e:
             # 发送错误信息
+            print(f"识别线程出错: {e}")
+            import traceback
+            traceback.print_exc()
             self.progress_signal.emit({
                 'current': 0,
                 'total': 1,
@@ -3976,7 +3996,7 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
         try:
             print("创建删除按钮...")
             self.delete_button = PushButton("删除选中的校准集")
-            self.delete_button.setIcon(FIF.DELETE)
+            self.delete_button.setIcon(FIF.DELETE.icon())  # 使用icon()方法获取QIcon
             self.delete_button.setEnabled(False)  # 初始禁用，直到选中项目
             self.delete_button.clicked.connect(self.delete_selected_calibration)
         except Exception as btn_err:
@@ -3998,7 +4018,11 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
             
             # 修改按钮文本
             self.yesButton.setText('开始识别')
+            self.yesButton.setIcon(FIF.PLAY.icon())  # 使用icon()方法获取QIcon
+            self.yesButton.setFixedWidth(120)  # 固定按钮宽度
             self.cancelButton.setText('取消')
+            self.cancelButton.setIcon(FIF.CANCEL.icon())  # 使用icon()方法获取QIcon
+            self.cancelButton.setFixedWidth(100)  # 固定按钮宽度
             
             # 设置最小宽度
             self.widget.setMinimumWidth(450)
@@ -4115,8 +4139,8 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
                 from health_bar_calibration import HealthBarCalibration
                 self.calibration = HealthBarCalibration()
             
-            # 获取校准集列表
-            cal_sets = self.calibration.get_calibration_sets()
+            # 获取校准集列表 - 使用get_calibration_set_names而不是get_calibration_sets
+            cal_sets = self.calibration.get_calibration_set_names()
             
             # 安全检查：确保 list_widget 存在
             list_widget = self._safe_get_attr('list_widget')
@@ -4217,6 +4241,37 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
             print(f"验证选择时出错: {e}")
             import traceback
             traceback.print_exc()
+            return False
+
+    def exec(self):
+        """显示对话框并等待用户操作"""
+        try:
+            # 显示对话框
+            print(f"正在显示CalibrationSelectionMessageBox对话框")
+            result = super().exec()
+            print(f"对话框结果: {result}, 类型: {type(result)}")
+            
+            # 如果用户点击了确定按钮
+            if result:
+                # 获取当前选中的校准集
+                list_widget = self._safe_get_attr('list_widget')
+                if list_widget and list_widget.currentItem():
+                    self.selected_calibration = list_widget.currentItem().text()
+                    print(f"用户选择了校准集: '{self.selected_calibration}'")
+                else:
+                    print("警告: 未能获取选中的校准集")
+                    self.selected_calibration = None
+            else:
+                print("用户取消了对话框")
+                self.selected_calibration = None
+                
+            print(f"对话框关闭，selected_calibration = '{self.selected_calibration}'")
+            return result
+        except Exception as e:
+            print(f"CalibrationSelectionMessageBox.exec 方法出错: {e}")
+            import traceback
+            traceback.print_exc()
+            self.selected_calibration = None
             return False
 
 class HotkeyEventFilter(QObject):
@@ -4333,19 +4388,65 @@ class ConfirmMessageBox(MessageBoxBase):
     def __init__(self, title, content, parent=None):
         super().__init__(parent)
         self.titleLabel = SubtitleLabel(title, self)
+        self.titleLabel.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333;")
+        
+        # 添加图标
+        self.iconLabel = QLabel(self)
+        # 正确使用FluentIcon获取图标
+        pixmap = FIF.HELP.icon().pixmap(32, 32)
+        self.iconLabel.setPixmap(pixmap)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        
+        # 标题栏布局
+        titleLayout = QHBoxLayout()
+        titleLayout.addWidget(self.iconLabel)
+        titleLayout.addWidget(self.titleLabel)
+        titleLayout.addStretch(1)
+        
+        # 内容标签
         self.contentLabel = BodyLabel(content)
         self.contentLabel.setWordWrap(True)
+        self.contentLabel.setStyleSheet("line-height: 150%; margin: 10px 0; font-size: 14px; color: #505050;")
         
         # 添加到视图布局
-        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addLayout(titleLayout)
         self.viewLayout.addWidget(self.contentLabel)
         
-        # 设置按钮文本
+        # 设置按钮文本和样式
         self.yesButton.setText('确定')
+        self.yesButton.setIcon(FIF.ACCEPT.icon())  # 使用icon()方法获取QIcon
         self.cancelButton.setText('取消')
+        self.cancelButton.setIcon(FIF.CANCEL.icon())  # 使用icon()方法获取QIcon
         
-        # 设置最小宽度
-        self.widget.setMinimumWidth(350)
+        # 设置外观和尺寸
+        self.widget.setMinimumWidth(380)
+        self.widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(253, 253, 253, 0.98);
+                border-radius: 8px;
+            }
+        """)
+        
+        # 设置动画和阴影效果
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(200)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.start()
+        
+        # 自定义阴影效果
+        self.customShadowEffect()
+        
+    def customShadowEffect(self):
+        """自定义对话框阴影效果（不覆盖父类方法）"""
+        try:
+            shadow = QGraphicsDropShadowEffect(self.widget)
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            shadow.setOffset(0, 0)
+            self.widget.setGraphicsEffect(shadow)
+        except Exception as e:
+            print(f"设置阴影效果时出错: {e}")
 
 # 添加职业图标对话框类
 class ProfessionIconMessageBox(MessageBoxBase):
@@ -4469,7 +4570,7 @@ class ProfessionIconsManageDialog(MessageBoxBase):
             
             # 删除按钮
             deleteBtn = TransparentPushButton("删除")
-            deleteBtn.setIcon(FIF.DELETE)
+            deleteBtn.setIcon(FIF.DELETE.icon())  # 使用icon()方法获取QIcon
             deleteBtn.setObjectName(icon_file)  # 存储文件名用于删除
             deleteBtn.clicked.connect(lambda checked, file=icon_file, frm=frame: self.parent.deleteProfessionIcon(file, frm, self))
             
@@ -4485,20 +4586,96 @@ class SelectionGuideDialog(MessageBoxBase):
 
     def __init__(self, title, content, parent=None):
         super().__init__(parent)
+        # 不要设置额外的窗口标志，因为MessageBoxBase可能已经设置了
+        # 设置标题和内容
         self.titleLabel = SubtitleLabel(title, self)
+        self.titleLabel.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333;")
+        
+        # 添加图标
+        self.iconLabel = QLabel(self)
+        # 直接使用FIF.SEARCH作为图标，而不是尝试创建QIcon
+        pixmap = FIF.SEARCH.icon().pixmap(36, 36)
+        self.iconLabel.setPixmap(pixmap)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        self.iconLabel.setStyleSheet("margin-right: 10px;")
+        
+        # 标题与图标水平布局
+        titleLayout = QHBoxLayout()
+        titleLayout.addWidget(self.iconLabel)
+        titleLayout.addWidget(self.titleLabel)
+        titleLayout.addStretch(1)
+        titleLayout.setContentsMargins(0, 5, 0, 10)  # 增加上下间距
+        
+        # 内容标签增强
         self.contentLabel = BodyLabel(content)
         self.contentLabel.setWordWrap(True)
+        self.contentLabel.setStyleSheet("line-height: 160%; margin: 12px 0; font-size: 14px; color: #505050;")
+        
+        # 创建分隔线
+        self.separator = QFrame()
+        self.separator.setFrameShape(QFrame.HLine)
+        self.separator.setFrameShadow(QFrame.Sunken)
+        self.separator.setStyleSheet("background-color: #e0e0e0; max-height: 1px; margin: 15px 0;")
+        
+        # 提示信息
+        self.tipLabel = CaptionLabel("提示：选择区域后可按ESC键取消选择")
+        self.tipLabel.setStyleSheet("color: #0078d7; margin-top: 10px; font-size: 12px;")
+        
+        # 图示区域 - 显示简单的选择框示意图
+        self.demoLabel = QLabel(self)
+        self.demoLabel.setFixedHeight(80)
+        self.demoLabel.setStyleSheet("""
+            background-color: #f5f5f5; 
+            border: 1px dashed #999; 
+            border-radius: 4px;
+        """)
+        self.demoLabel.setAlignment(Qt.AlignCenter)
+        self.demoLabel.setText("↖ 拖动鼠标框选区域示例 ↘")
         
         # 添加到视图布局
-        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addLayout(titleLayout)
         self.viewLayout.addWidget(self.contentLabel)
+        self.viewLayout.addWidget(self.demoLabel)
+        self.viewLayout.addWidget(self.separator)
+        self.viewLayout.addWidget(self.tipLabel)
         
-        # 修改按钮文本
+        # 修改按钮文本和样式
         self.yesButton.setText('开始选择')
+        self.yesButton.setIcon(FIF.PLAY.icon())  # 使用icon()方法获取QIcon
+        self.yesButton.setFixedWidth(120)  # 固定按钮宽度
         self.cancelButton.setText('取消')
+        self.cancelButton.setIcon(FIF.CANCEL.icon())  # 使用icon()方法获取QIcon
+        self.cancelButton.setFixedWidth(100)  # 固定按钮宽度
         
-        # 设置最小宽度
-        self.widget.setMinimumWidth(400)
+        # 设置窗口样式和尺寸
+        self.widget.setMinimumWidth(480)
+        self.widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(253, 253, 253, 0.98);
+                border-radius: 8px;
+            }
+        """)
+        
+        # 设置动画效果
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(200)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.start()
+        
+        # 自定义阴影效果（不覆盖父类方法）
+        self.customShadowEffect()
+    
+    def customShadowEffect(self):
+        """自定义对话框阴影效果（不覆盖父类方法）"""
+        try:
+            shadow = QGraphicsDropShadowEffect(self.widget)
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            shadow.setOffset(0, 0)
+            self.widget.setGraphicsEffect(shadow)
+        except Exception as e:
+            print(f"设置阴影效果时出错: {e}")
 
 # 新增：通用文本输入对话框
 class TextInputMessageBox(MessageBoxBase):
@@ -4506,39 +4683,92 @@ class TextInputMessageBox(MessageBoxBase):
 
     def __init__(self, title, label_text, default_text="", placeholder_text="", parent=None):
         super().__init__(parent)
-        # self.titleLabel is inherited from MessageBoxBase and set through self.setTitleBar() or similar.
-        # We want to add a main title for the content area.
-        self.dialogTitleLabel = SubtitleLabel(title, self) # Use a different name to avoid conflict
+        
+        # 设置标题栏
+        self.dialogTitleLabel = SubtitleLabel(title, self)
+        self.dialogTitleLabel.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333;")
+        
+        # 添加图标
+        self.iconLabel = QLabel(self)
+        # 正确使用FluentIcon获取图标
+        pixmap = FIF.EDIT.icon().pixmap(32, 32)
+        self.iconLabel.setPixmap(pixmap)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        
+        # 标题栏布局
+        titleLayout = QHBoxLayout()
+        titleLayout.addWidget(self.iconLabel)
+        titleLayout.addWidget(self.dialogTitleLabel)
+        titleLayout.addStretch(1)
+        
+        # 添加到视图布局
+        self.viewLayout.addLayout(titleLayout)
 
-        self.viewLayout.addWidget(self.dialogTitleLabel)
-
-        # If label_text is provided, add it as a BodyLabel before the LineEdit
+        # 如果提供了标签文本，则添加为BodyLabel
         if label_text:
             self.inputInstructionLabel = BodyLabel(label_text, self)
+            self.inputInstructionLabel.setStyleSheet("margin-top: 10px; color: #505050;")
             self.viewLayout.addWidget(self.inputInstructionLabel)
 
+        # 输入框
         self.lineEdit = LineEdit(self)
         self.lineEdit.setText(default_text)
+        self.lineEdit.setStyleSheet("""
+            LineEdit {
+                padding: 8px;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                background-color: #fafafa;
+                margin-top: 5px;
+                margin-bottom: 5px;
+            }
+            LineEdit:focus {
+                border: 1px solid #0078d7;
+            }
+        """)
+        
         if placeholder_text:
             self.lineEdit.setPlaceholderText(placeholder_text)
         elif label_text and not default_text:
              self.lineEdit.setPlaceholderText(label_text)
-        self.lineEdit.setClearButtonEnabled(True)
         
+        self.lineEdit.setClearButtonEnabled(True)
         self.viewLayout.addWidget(self.lineEdit)
         
+        # 警告标签
         self.warningLabel = CaptionLabel("输入不能为空")
         self.warningLabel.setTextColor("#cf1010", QColor(255, 28, 32))
+        self.warningLabel.setStyleSheet("margin-top: 5px;")
         self.viewLayout.addWidget(self.warningLabel)
         self.warningLabel.hide()
 
-        # change the text of button
+        # 设置按钮文本和图标
         self.yesButton.setText('确定')
+        self.yesButton.setIcon(FIF.ACCEPT.icon())  # 使用icon()方法获取QIcon
         self.cancelButton.setText('取消')
+        self.cancelButton.setIcon(FIF.CANCEL.icon())  # 使用icon()方法获取QIcon
 
-        self.widget.setMinimumWidth(380)
+        # 设置对话框样式和尺寸
+        self.widget.setMinimumWidth(400)
+        self.widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(253, 253, 253, 0.98);
+                border-radius: 8px;
+            }
+        """)
         
+        # 连接回车按键事件
         self.lineEdit.returnPressed.connect(self.on_return_pressed)
+        
+        # 设置动画和阴影效果
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(200)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.start()
+        
+        # 自定义阴影效果
+        self.customShadowEffect()
 
     def on_return_pressed(self):
         if self.validate():
@@ -4548,20 +4778,107 @@ class TextInputMessageBox(MessageBoxBase):
         is_valid = bool(self.lineEdit.text().strip())
         self.warningLabel.setHidden(is_valid)
         self.lineEdit.setError(not is_valid)
-        # Disable yesButton if invalid
-        # self.yesButton.setEnabled(is_valid) # Optional: disable OK if invalid
         return is_valid
 
     def get_text(self):
         return self.lineEdit.text().strip()
+        
+    def customShadowEffect(self):
+        """自定义对话框阴影效果（不覆盖父类方法）"""
+        try:
+            shadow = QGraphicsDropShadowEffect(self.widget)
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            shadow.setOffset(0, 0)
+            self.widget.setGraphicsEffect(shadow)
+        except Exception as e:
+            print(f"设置阴影效果时出错: {e}")
+
+def test_calibration_loading():
+    """测试校准集加载和识别流程"""
+    from health_bar_calibration import HealthBarCalibration
+    import sys
+    
+    # 将输出重定向到文件
+    original_stdout = sys.stdout
+    with open('calibration_test_log.txt', 'w', encoding='utf-8') as f:
+        sys.stdout = f
+        
+        print("\n=== 开始测试校准集加载 ===")
+        
+        # 创建校准对象
+        calibration = HealthBarCalibration()
+        
+        # 检查校准文件是否存在
+        import os
+        calibration_file = "health_bars_calibration.json"
+        if os.path.exists(calibration_file):
+            print(f"校准文件 {calibration_file} 存在")
+            # 获取文件大小
+            file_size = os.path.getsize(calibration_file)
+            print(f"校准文件大小: {file_size} 字节")
+            
+            # 读取文件内容
+            try:
+                import json
+                with open(calibration_file, 'r', encoding='utf-8') as json_file:
+                    data = json.load(json_file)
+                    print(f"校准文件成功加载为JSON")
+                    print(f"校准集数量: {len(data.get('calibration_sets', {}))}")
+                    print(f"最后使用的校准集: {data.get('last_used', '无')}")
+                    
+                    # 打印所有校准集的基本信息
+                    for set_name, set_info in data.get('calibration_sets', {}).items():
+                        print(f"校准集 '{set_name}': {set_info.get('count')} 个血条, 校准时间: {set_info.get('calibration_time')}")
+            except Exception as e:
+                print(f"读取校准文件时出错: {e}")
+        else:
+            print(f"校准文件 {calibration_file} 不存在")
+        
+        # 获取所有校准集
+        cal_sets = calibration.get_calibration_set_names()
+        print(f"\n可用校准集: {cal_sets}")
+        
+        if not cal_sets:
+            print("没有可用的校准集，测试结束")
+            sys.stdout = original_stdout
+            return
+        
+        # 测试加载每一个校准集
+        for test_set in cal_sets:
+            print(f"\n--- 测试加载校准集: {test_set} ---")
+            
+            # 加载校准集
+            success = calibration.load_calibration(test_set)
+            if not success:
+                print(f"加载校准集 '{test_set}' 失败")
+                continue
+            
+            # 检查血条数据
+            health_bars = calibration.health_bars
+            print(f"校准集包含 {len(health_bars)} 个血条")
+            
+            # 打印血条位置
+            for i, bar in enumerate(health_bars):
+                print(f"血条 {i+1}: x1={bar.get('x1')}, y1={bar.get('y1')}, x2={bar.get('x2')}, y2={bar.get('y2')}")
+        
+        print("\n=== 校准集加载测试完成 ===\n")
+    
+    # 恢复标准输出
+    sys.stdout = original_stdout
+    print("校准测试完成，详细日志已保存到 calibration_test_log.txt")
 
 def main():
+    """主函数，用于启动应用程序"""
     # 设置高DPI支持 - 在创建应用程序之前进行设置
     # 注意：必须在QApplication实例化之前设置这些属性
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     
     app = QApplication(sys.argv)
+    
+    # 测试校准集加载
+    test_calibration_loading()
     
     # 设置全局样式
     app.setStyleSheet(GLOBAL_STYLE)

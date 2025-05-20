@@ -1,19 +1,29 @@
-import os
-import sys
-import json
 import cv2
-import numpy as np
 import time
+import json
+import numpy as np
+import os
+from PIL import Image, ImageDraw
+import threading
+import sys
 import importlib.util
+
+# 从PyQt5导入所需的类和库
+from PyQt5.QtCore import Qt, QPropertyAnimation, QObject, pyqtSignal as Signal, QRect, QTimer
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QMessageBox, QProgressBar, QFrame, QInputDialog,
-    QListWidget, QListWidgetItem, QAbstractItemView
+    QListWidget, QListWidgetItem, QAbstractItemView, QGraphicsDropShadowEffect
 )
-from PyQt5.QtCore import Qt, pyqtSignal as Signal, QObject, QRect, QTimer
+
+from qfluentwidgets import (InfoBar, InfoBarPosition, MessageBoxBase, SubtitleLabel, 
+                           BodyLabel, PushButton, PrimaryPushButton, CaptionLabel, 
+                           ToolButton, ComboBox, Action, setTheme, Theme, MessageBox, 
+                           TransparentPushButton, LineEdit, StrongBodyLabel, FluentIcon as FIF)
+
 from 选择框 import show_selection_box
 from teammate_recognition import TeammateRecognition
-from qfluentwidgets import InfoBar, InfoBarPosition, MessageBoxBase, SubtitleLabel, BodyLabel, PushButton, PrimaryPushButton, CaptionLabel
 
 # 动态导入带空格的模块
 module_name = "team_members(choice box)"
@@ -87,7 +97,9 @@ class HealthBarCalibration:
         返回:
             bool: 是否成功加载校准数据
         """
+        print(f"\n--- 加载校准集 '{set_name}' ---")
         if not self.calibration_sets:
+            print("错误: 没有可用的校准集")
             return False
             
         if set_name is None:
@@ -95,16 +107,28 @@ class HealthBarCalibration:
                 # 如果未指定且当前无选择，则使用第一个校准集
                 if self.calibration_sets:
                     self.current_set_name = list(self.calibration_sets.keys())[0]
+                    print(f"未指定校准集，使用第一个: {self.current_set_name}")
                 else:
+                    print("错误: 没有可用的校准集")
                     return False
+            else:
+                print(f"使用当前校准集: {self.current_set_name}")
         else:
+            print(f"设置当前校准集为: {set_name}")
             self.current_set_name = set_name
         
         if self.current_set_name in self.calibration_sets:
             self.health_bars = self.calibration_sets[self.current_set_name]['health_bars']
+            print(f"校准集 '{self.current_set_name}' 加载成功，包含 {len(self.health_bars)} 个血条")
+            
+            # 打印血条位置信息
+            for i, bar in enumerate(self.health_bars):
+                print(f"血条 {i+1}: x1={bar.get('x1')}, y1={bar.get('y1')}, x2={bar.get('x2')}, y2={bar.get('y2')}")
+            
             return len(self.health_bars) > 0
-        
-        return False
+        else:
+            print(f"错误: 校准集 '{self.current_set_name}' 不存在")
+            return False
     
     def save_calibration(self):
         """保存当前校准数据集
@@ -147,55 +171,85 @@ class HealthBarCalibration:
         返回:
             bool: 是否成功完成校准
         """
-        # 创建新的校准集名称
-        self.current_set_name = f"{num_health_bars}条血条_{time.strftime('%m%d%H%M')}"
-        self.health_bars = []  # 清空现有校准数据
-        
-        self.signals.status_signal.emit("开始血条位置校准...")
-        
-        # 显示开始提示
-        QMessageBox.information(None, "校准指导", 
-                               f"即将开始校准 {num_health_bars} 个血条位置。\n\n"
-                               "请依次框选每个队友的血条区域，\n"
-                               "框选完成后按Enter键确认。\n\n"
-                               "第一个血条开始...")
-        
-        for i in range(num_health_bars):
-            self.signals.status_signal.emit(f"请框选第 {i+1}/{num_health_bars} 个血条区域...")
-            self.signals.progress_signal.emit(int(i * 100 / num_health_bars))
+        try:
+            # 创建新的校准集名称
+            self.current_set_name = f"{num_health_bars}条血条_{time.strftime('%m%d%H%M')}"
+            self.health_bars = []  # 清空现有校准数据
             
-            # 如果不是第一个，显示下一个的提示
-            if i > 0:
-                QMessageBox.information(None, "继续校准", 
-                                      f"已完成 {i}/{num_health_bars} 个血条。\n\n"
-                                      f"请继续框选第 {i+1} 个血条区域。")
+            self.signals.status_signal.emit("开始血条位置校准...")
             
-            rect = self._select_health_bar_area()
-            if rect is None:
-                self.signals.status_signal.emit("校准被用户取消")
+            # 显示开始提示 - 使用无边框对话框
+            try:
+                guide_dialog = CalibrationGuideMessageBox(num_health_bars, True)
+                guide_dialog.exec()
+            except Exception as e:
+                print(f"显示校准指导对话框时出错: {e}")
+                self.signals.status_signal.emit(f"校准指导显示失败: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            for i in range(num_health_bars):
+                self.signals.status_signal.emit(f"请框选第 {i+1}/{num_health_bars} 个血条区域...")
+                self.signals.progress_signal.emit(int(i * 100 / num_health_bars))
+                
+                # 如果不是第一个，显示下一个的提示 - 使用无边框对话框
+                if i > 0:
+                    try:
+                        continue_dialog = CalibrationGuideMessageBox((i, num_health_bars), False)
+                        continue_dialog.exec()
+                    except Exception as e:
+                        print(f"显示继续校准对话框时出错: {e}")
+                        # 错误不会中断流程
+                
+                # 显示选择框并等待用户选择
+                rect = self._select_health_bar_area()
+                if rect is None:
+                    self.signals.status_signal.emit("校准被用户取消")
+                    return False
+                
+                # 检查rect是否有效
+                if rect.width() <= 0 or rect.height() <= 0:
+                    self.signals.status_signal.emit("选择区域无效，校准已取消")
+                    return False
+                
+                # 添加有效的血条区域
+                self.health_bars.append({
+                    'x1': rect.x(),
+                    'y1': rect.y(),
+                    'x2': rect.x() + rect.width(),
+                    'y2': rect.y() + rect.height(),
+                    'recognition_done': False
+                })
+            
+            # 完成消息 - 使用无边框对话框
+            try:
+                complete_dialog = CalibrationCompleteMessageBox(num_health_bars)
+                complete_dialog.exec()
+            except Exception as e:
+                print(f"显示校准完成对话框时出错: {e}")
+                # 这个错误不影响校准结果
+            
+            # 保存校准结果
+            if self.health_bars:
+                success = self.save_calibration()
+                if success:
+                    self.signals.status_signal.emit(f"血条校准完成并保存为 '{self.current_set_name}'")
+                    self.signals.progress_signal.emit(100)
+                    self.signals.complete_signal.emit(self.health_bars)
+                else:
+                    self.signals.status_signal.emit("血条校准完成但保存失败")
+                
+                return success
+            else:
+                self.signals.status_signal.emit("没有有效的血条区域，校准失败")
                 return False
                 
-            self.health_bars.append({
-                'x1': rect.x(),
-                'y1': rect.y(),
-                'x2': rect.x() + rect.width(),
-                'y2': rect.y() + rect.height(),
-                'recognition_done': False
-            })
-        
-        # 完成消息
-        QMessageBox.information(None, "校准完成", 
-                               f"已完成所有 {num_health_bars} 个血条的校准！")
-        
-        success = self.save_calibration()
-        if success:
-            self.signals.status_signal.emit(f"血条校准完成并保存为 '{self.current_set_name}'")
-            self.signals.progress_signal.emit(100)
-            self.signals.complete_signal.emit(self.health_bars)
-        else:
-            self.signals.status_signal.emit("血条校准完成但保存失败")
-        
-        return success
+        except Exception as e:
+            self.signals.status_signal.emit(f"校准过程中发生错误: {e}")
+            print(f"校准过程中发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def get_calibration_set_names(self):
         """获取所有校准集名称
@@ -264,6 +318,18 @@ class HealthBarCalibration:
         selected_rect = [None]
         
         def on_selection_complete(rect):
+            # 添加对rect为None或无效的检查
+            if rect is None:
+                print("选择被取消或返回了None")
+                selected_rect[0] = None
+                return
+            
+            # 检查矩形是否有效（宽度和高度大于0）
+            if rect.width() <= 0 or rect.height() <= 0:
+                print(f"选择的矩形无效: 宽度={rect.width()}, 高度={rect.height()}")
+                selected_rect[0] = None
+                return
+            
             selected_rect[0] = rect
             print(f"选择完成: {rect}")
         
@@ -272,8 +338,16 @@ class HealthBarCalibration:
             from 选择框 import show_selection_box
             result = show_selection_box(on_selection_complete)
             
-            if result and selected_rect[0] is not None:
+            # 检查选择框结果：如果用户取消了选择（按了ESC）返回None
+            if not result:
+                print("用户取消了选择（按了ESC键）")
+                return None
+            
+            # 检查是否成功选择了矩形
+            if selected_rect[0] is not None:
                 return selected_rect[0]
+            
+            # 如果没有有效的矩形，也返回None
             return None
         except Exception as e:
             print(f"选择区域时出错: {str(e)}")
@@ -1056,6 +1130,222 @@ def select_bar_count_dialog(parent=None):
         return dialog.result
     else:
         return 0
+
+# 修改无边框校准指导对话框类
+class CalibrationGuideMessageBox(MessageBoxBase):
+    """校准指导无边框对话框"""
+    
+    def __init__(self, num_health_bars, is_first=True, parent=None):
+        # 创建自己的窗口作为根组件，不依赖父窗口的尺寸
+        tempWidget = None
+        try:
+            if parent is None:
+                # 获取当前活动窗口
+                parent = QApplication.activeWindow()
+                if parent is None:
+                    # 创建临时容器但不显示
+                    from PyQt5.QtWidgets import QWidget
+                    tempWidget = QWidget()
+                    tempWidget.resize(800, 600)
+                    parent = tempWidget
+        except Exception as e:
+            print(f"CalibrationGuideMessageBox创建父窗口时出错: {e}")
+            # 在出错时保证有一个父级窗口
+            from PyQt5.QtWidgets import QWidget
+            tempWidget = QWidget()
+            tempWidget.resize(800, 600)
+            parent = tempWidget
+            
+        # 调用父类初始化
+        super().__init__(parent)
+        
+        # 设置标题
+        title = "校准指导" if is_first else "继续校准"
+        self.titleLabel = SubtitleLabel(title, self)
+        self.titleLabel.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333;")
+        
+        # 添加图标
+        self.iconLabel = QLabel(self)
+        pixmap = FIF.SEARCH.icon().pixmap(32, 32)
+        self.iconLabel.setPixmap(pixmap)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        self.iconLabel.setStyleSheet("margin-right: 10px;")
+        
+        # 标题栏布局
+        titleLayout = QHBoxLayout()
+        titleLayout.addWidget(self.iconLabel)
+        titleLayout.addWidget(self.titleLabel)
+        titleLayout.addStretch(1)
+        
+        # 内容文本
+        content_text = ""
+        if is_first:
+            # 初始校准提示
+            # 确保 num_health_bars 是整数类型
+            bar_count = num_health_bars
+            if isinstance(num_health_bars, tuple) and len(num_health_bars) >= 2:
+                bar_count = num_health_bars[1]  # 使用总数
+            
+            content_text = (f"即将开始校准 {bar_count} 个血条位置。\n\n"
+                            "请依次框选每个队友的血条区域，\n"
+                            "框选完成后按Enter键确认。\n\n"
+                            "第一个血条开始...")
+        else:
+            # 继续校准提示
+            if isinstance(num_health_bars, tuple) and len(num_health_bars) >= 2:
+                current, total = num_health_bars
+                content_text = (f"已完成 {current}/{total} 个血条。\n\n"
+                                f"请继续框选第 {current+1} 个血条区域。")
+            else:
+                # 安全处理其他情况
+                content_text = "请继续框选下一个血条区域。"
+        
+        # 内容标签
+        self.contentLabel = BodyLabel(content_text)
+        self.contentLabel.setWordWrap(True)
+        self.contentLabel.setStyleSheet("line-height: 150%; margin: 10px 0; font-size: 14px; color: #505050;")
+        
+        # 提示信息
+        self.tipLabel = CaptionLabel("提示：按ESC键可以取消当前选择")
+        self.tipLabel.setStyleSheet("color: #0078d7; margin-top: 10px; font-size: 12px;")
+        
+        # 添加到视图布局
+        self.viewLayout.addLayout(titleLayout)
+        self.viewLayout.addWidget(self.contentLabel)
+        self.viewLayout.addWidget(self.tipLabel)
+        
+        # 设置按钮文本和样式
+        self.yesButton.setText('确定')
+        self.yesButton.setIcon(FIF.ACCEPT.icon())
+        self.cancelButton.hide()  # 隐藏取消按钮
+        
+        # 设置窗口样式和尺寸
+        self.widget.setMinimumWidth(380)
+        self.widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(253, 253, 253, 0.98);
+                border-radius: 8px;
+            }
+        """)
+        
+        # 设置动画和阴影效果
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(200)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.start()
+        
+        # 自定义阴影效果
+        self.customShadowEffect()
+    
+    def customShadowEffect(self):
+        """自定义对话框阴影效果"""
+        try:
+            shadow = QGraphicsDropShadowEffect(self.widget)
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            shadow.setOffset(0, 0)
+            self.widget.setGraphicsEffect(shadow)
+        except Exception as e:
+            print(f"设置阴影效果时出错: {e}")
+
+# 修改无边框校准完成对话框类
+class CalibrationCompleteMessageBox(MessageBoxBase):
+    """校准完成无边框对话框"""
+    
+    def __init__(self, num_health_bars, parent=None):
+        # 创建自己的窗口作为根组件，不依赖父窗口的尺寸
+        tempWidget = None
+        try:
+            if parent is None:
+                # 获取当前活动窗口
+                parent = QApplication.activeWindow()
+                if parent is None:
+                    # 创建临时容器但不显示
+                    from PyQt5.QtWidgets import QWidget
+                    tempWidget = QWidget()
+                    tempWidget.resize(800, 600)
+                    parent = tempWidget
+        except Exception as e:
+            print(f"CalibrationCompleteMessageBox创建父窗口时出错: {e}")
+            # 在出错时保证有一个父级窗口
+            from PyQt5.QtWidgets import QWidget
+            tempWidget = QWidget()
+            tempWidget.resize(800, 600)
+            parent = tempWidget
+            
+        # 调用父类初始化
+        super().__init__(parent)
+        
+        # 设置标题
+        self.titleLabel = SubtitleLabel("校准完成", self)
+        self.titleLabel.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333;")
+        
+        # 添加图标
+        self.iconLabel = QLabel(self)
+        pixmap = FIF.CHECKMARK.icon().pixmap(32, 32)
+        self.iconLabel.setPixmap(pixmap)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        self.iconLabel.setStyleSheet("margin-right: 10px;")
+        
+        # 标题栏布局
+        titleLayout = QHBoxLayout()
+        titleLayout.addWidget(self.iconLabel)
+        titleLayout.addWidget(self.titleLabel)
+        titleLayout.addStretch(1)
+        
+        # 内容文本 - 处理num_health_bars可能是元组的情况
+        if isinstance(num_health_bars, tuple) and len(num_health_bars) >= 2:
+            # 如果是元组(当前索引, 总数)
+            current, total = num_health_bars
+            content_text = f"已完成所有 {total} 个血条的校准！"
+        else:
+            # 如果是单个数字
+            content_text = f"已完成所有 {num_health_bars} 个血条的校准！"
+        
+        # 内容标签
+        self.contentLabel = BodyLabel(content_text)
+        self.contentLabel.setWordWrap(True)
+        self.contentLabel.setStyleSheet("line-height: 150%; margin: 10px 0; font-size: 14px; color: #505050;")
+        
+        # 添加到视图布局
+        self.viewLayout.addLayout(titleLayout)
+        self.viewLayout.addWidget(self.contentLabel)
+        
+        # 设置按钮文本和样式
+        self.yesButton.setText('确定')
+        self.yesButton.setIcon(FIF.ACCEPT.icon())
+        self.cancelButton.hide()  # 隐藏取消按钮
+        
+        # 设置窗口样式和尺寸
+        self.widget.setMinimumWidth(350)
+        self.widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(253, 253, 253, 0.98);
+                border-radius: 8px;
+            }
+        """)
+        
+        # 设置动画和阴影效果
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(200)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.start()
+        
+        # 自定义阴影效果
+        self.customShadowEffect()
+    
+    def customShadowEffect(self):
+        """自定义对话框阴影效果"""
+        try:
+            shadow = QGraphicsDropShadowEffect(self.widget)
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            shadow.setOffset(0, 0)
+            self.widget.setGraphicsEffect(shadow)
+        except Exception as e:
+            print(f"设置阴影效果时出错: {e}")
 
 
 if __name__ == "__main__":
