@@ -1,6 +1,6 @@
 {
     "auto_select": {
-        "enabled": true,
+        "enabled": false,
         "health_threshold": 85,
         "cooldown_time": 1.0,
         "priority_roles": [

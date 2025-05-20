@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal as Signal, QObject, QRect, QTimer
 from 选择框 import show_selection_box
 from teammate_recognition import TeammateRecognition
-from qfluentwidgets import InfoBar, InfoBarPosition
+from qfluentwidgets import InfoBar, InfoBarPosition, MessageBoxBase, SubtitleLabel, BodyLabel, PushButton, PrimaryPushButton, CaptionLabel
 
 # 动态导入带空格的模块
 module_name = "team_members(choice box)"
@@ -47,6 +47,10 @@ class HealthBarCalibration:
         self.recognition = TeammateRecognition()  # 队友识别工具
         self.signals = CalibrationSignals()
         self.is_first_run = not os.path.exists(self.calibration_file)
+        
+        # 新增：初始化全局默认颜色属性
+        self.default_hp_color_lower = None
+        self.default_hp_color_upper = None
         
         # 加载校准数据
         self.load_all_calibration_sets()
@@ -324,9 +328,14 @@ class HealthBarCalibration:
                 teammate.x2 = x2
                 teammate.y2 = y2
                 
-                # 设置默认的血条颜色范围（降低范围，使检测更精确）
-                teammate.hp_color_lower = np.array([45, 80, 130])
-                teammate.hp_color_upper = np.array([60, 160, 210])
+                # 应用颜色设置
+                if self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                    teammate.hp_color_lower = np.copy(self.default_hp_color_lower)
+                    teammate.hp_color_upper = np.copy(self.default_hp_color_upper)
+                else:
+                    # 如果没有全局默认颜色，则使用硬编码的备用值
+                    teammate.hp_color_lower = np.array([45, 80, 130]) 
+                    teammate.hp_color_upper = np.array([60, 160, 210])
                 
                 # 保存队友配置
                 teammate.save_config()
@@ -401,90 +410,11 @@ class HealthBarCalibration:
         返回:
             int: 用户选择的血条数量，如果用户取消则返回0
         """
-        dialog = QDialog(self)
-        dialog.setWindowTitle("选择血条数量")
-        layout = QVBoxLayout(dialog)
+        # 使用基于 MessageBoxBase 的无边框对话框
+        dialog = BarCountSelectionMessageBox(None)  # 不设置父窗口以避免可能的窗口层级问题
         
-        # 添加说明文本
-        label = QLabel("请选择要校准的血条数量：", dialog)
-        layout.addWidget(label)
-        
-        # 添加按钮组
-        button_layout = QHBoxLayout()
-        
-        btn_5 = QPushButton("5条血条", dialog)
-        btn_10 = QPushButton("10条血条", dialog)
-        btn_20 = QPushButton("20条血条", dialog)
-        btn_custom = QPushButton("自定义...", dialog)
-        
-        button_layout.addWidget(btn_5)
-        button_layout.addWidget(btn_10)
-        button_layout.addWidget(btn_20)
-        button_layout.addWidget(btn_custom)
-        
-        layout.addLayout(button_layout)
-        
-        # 用于存储选择结果
-        result = [5]  # 默认为5条
-        
-        # 连接按钮信号
-        def on_btn_5_clicked():
-            result[0] = 5
-            dialog.accept()
-            
-        def on_btn_10_clicked():
-            result[0] = 10
-            dialog.accept()
-            
-        def on_btn_20_clicked():
-            result[0] = 20
-            dialog.accept()
-            
-        def on_btn_custom_clicked():
-            # 显示自定义数量输入对话框
-            custom_num, ok = QInputDialog.getInt(
-                dialog, 
-                "自定义血条数量", 
-                "请输入要校准的血条数量：",
-                5, 1, 50, 1
-            )
-            if ok:
-                result[0] = custom_num
-                dialog.accept()
-        
-        btn_5.clicked.connect(on_btn_5_clicked)
-        btn_10.clicked.connect(on_btn_10_clicked)
-        btn_20.clicked.connect(on_btn_20_clicked)
-        btn_custom.clicked.connect(on_btn_custom_clicked)
-        
-        # 添加取消按钮
-        cancel_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消", dialog)
-        cancel_btn.clicked.connect(dialog.reject)
-        cancel_layout.addStretch()
-        cancel_layout.addWidget(cancel_btn)
-        layout.addLayout(cancel_layout)
-        
-        # 设置对话框样式
-        dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f5;
-            }
-            QLabel {
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
-            QPushButton {
-                min-width: 100px;
-                min-height: 30px;
-                padding: 5px;
-                font-size: 13px;
-            }
-        """)
-        
-        # 显示对话框并等待用户选择
-        if dialog.exec() == QDialog.Accepted:
-            return result[0]
+        if dialog.exec():
+            return dialog.result
         else:
             return 0
 
@@ -547,6 +477,25 @@ class HealthBarCalibration:
         except Exception as e:
             self.signals.status_signal.emit(f"清除队友识别结果失败: {str(e)}")
             return False
+
+    def get_calibration_sets(self):
+        """获取所有校准集名称（作为 get_calibration_set_names 的别名）
+        
+        返回:
+            list: 校准集名称列表
+        """
+        return self.get_calibration_set_names()
+        
+    def get_calibration_info(self, set_name):
+        """获取指定校准集的信息（作为 get_calibration_set_info 的别名）
+        
+        参数:
+            set_name (str): 校准集名称
+            
+        返回:
+            dict: 校准集信息，包含count和calibration_time
+        """
+        return self.get_calibration_set_info(set_name)
 
 
 class CalibrationDialog(QDialog):
@@ -904,90 +853,10 @@ class CalibrationDialog(QDialog):
         返回:
             int: 用户选择的血条数量，如果用户取消则返回0
         """
-        dialog = QDialog(self)
-        dialog.setWindowTitle("选择血条数量")
-        layout = QVBoxLayout(dialog)
+        dialog = BarCountSelectionMessageBox(None)  # 不设置父窗口以避免可能的窗口层级问题
         
-        # 添加说明文本
-        label = QLabel("请选择要校准的血条数量：", dialog)
-        layout.addWidget(label)
-        
-        # 添加按钮组
-        button_layout = QHBoxLayout()
-        
-        btn_5 = QPushButton("5条血条", dialog)
-        btn_10 = QPushButton("10条血条", dialog)
-        btn_20 = QPushButton("20条血条", dialog)
-        btn_custom = QPushButton("自定义...", dialog)
-        
-        button_layout.addWidget(btn_5)
-        button_layout.addWidget(btn_10)
-        button_layout.addWidget(btn_20)
-        button_layout.addWidget(btn_custom)
-        
-        layout.addLayout(button_layout)
-        
-        # 用于存储选择结果
-        result = [5]  # 默认为5条
-        
-        # 连接按钮信号
-        def on_btn_5_clicked():
-            result[0] = 5
-            dialog.accept()
-            
-        def on_btn_10_clicked():
-            result[0] = 10
-            dialog.accept()
-            
-        def on_btn_20_clicked():
-            result[0] = 20
-            dialog.accept()
-            
-        def on_btn_custom_clicked():
-            # 显示自定义数量输入对话框
-            custom_num, ok = QInputDialog.getInt(
-                dialog, 
-                "自定义血条数量", 
-                "请输入要校准的血条数量：",
-                5, 1, 50, 1
-            )
-            if ok:
-                result[0] = custom_num
-                dialog.accept()
-        
-        btn_5.clicked.connect(on_btn_5_clicked)
-        btn_10.clicked.connect(on_btn_10_clicked)
-        btn_20.clicked.connect(on_btn_20_clicked)
-        btn_custom.clicked.connect(on_btn_custom_clicked)
-        
-        # 添加取消按钮
-        cancel_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消", dialog)
-        cancel_btn.clicked.connect(dialog.reject)
-        cancel_layout.addStretch()
-        cancel_layout.addWidget(cancel_btn)
-        layout.addLayout(cancel_layout)
-        
-        # 设置对话框样式
-        dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f5;
-            }
-            QLabel {
-                font-size: 14px;
-                margin-bottom: 10px;
-            }
-            QPushButton {
-                min-width: 100px;
-                min-height: 30px;
-                padding: 5px;
-                font-size: 13px;
-            }
-        """)
-        
-        # 显示对话框并等待用户选择
-        if dialog.exec() == QDialog.Accepted:
-            return result[0]
+        if dialog.exec():
+            return dialog.result
         else:
             return 0
 
@@ -1107,6 +976,71 @@ def quick_calibration(parent=None):
     
     return success
 
+# 新增 BarCountSelectionMessageBox 类
+class BarCountSelectionMessageBox(MessageBoxBase):
+    """基于 MessageBoxBase 的血条数量选择对话框"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel('选择血条数量', self)
+        self.contentLabel = BodyLabel("请选择要校准的血条数量：")
+        self.contentLabel.setWordWrap(True)
+        
+        # 创建按钮布局
+        self.buttonLayout = QHBoxLayout()
+        self.btn_5 = PushButton("5条血条", self)
+        self.btn_10 = PushButton("10条血条", self)
+        self.btn_20 = PushButton("20条血条", self)
+        self.btn_custom = PushButton("自定义...", self)
+        
+        self.buttonLayout.addWidget(self.btn_5)
+        self.buttonLayout.addWidget(self.btn_10)
+        self.buttonLayout.addWidget(self.btn_20)
+        self.buttonLayout.addWidget(self.btn_custom)
+        
+        # 添加所有控件到视图布局
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.contentLabel)
+        self.viewLayout.addLayout(self.buttonLayout)
+        
+        # 修改默认按钮文本
+        self.yesButton.setText('确定')
+        self.cancelButton.setText('取消')
+        
+        # 隐藏确定按钮，我们将直接使用选择按钮
+        self.hideYesButton()
+        
+        # 设置最小宽度
+        self.widget.setMinimumWidth(400)
+        
+        # 存储结果
+        self.result = 0
+        
+        # 连接按钮信号
+        self.btn_5.clicked.connect(lambda: self._set_result(5))
+        self.btn_10.clicked.connect(lambda: self._set_result(10))
+        self.btn_20.clicked.connect(lambda: self._set_result(20))
+        self.btn_custom.clicked.connect(self._show_custom_dialog)
+    
+    def _set_result(self, value):
+        """设置结果并接受对话框"""
+        self.result = value
+        self.accept()
+    
+    def _show_custom_dialog(self):
+        """显示自定义数量输入对话框"""
+        from PyQt5.QtWidgets import QInputDialog
+        custom_num, ok = QInputDialog.getInt(
+            self, 
+            "自定义血条数量", 
+            "请输入要校准的血条数量：",
+            5, 1, 50, 1
+        )
+        if ok:
+            self.result = custom_num
+            self.accept()
+
+# 修改 select_bar_count_dialog 函数
 def select_bar_count_dialog(parent=None):
     """显示血条数量选择对话框(独立版本)
     
@@ -1116,91 +1050,10 @@ def select_bar_count_dialog(parent=None):
     # 确保应用已初始化
     app = ensure_application()
     
-    # 创建对话框
-    dialog = QDialog(parent)
-    dialog.setWindowTitle("选择血条数量")
-    layout = QVBoxLayout(dialog)
-    
-    # 添加说明文本
-    label = QLabel("请选择要校准的血条数量：", dialog)
-    layout.addWidget(label)
-    
-    # 添加按钮组
-    button_layout = QHBoxLayout()
-    
-    btn_5 = QPushButton("5条血条", dialog)
-    btn_10 = QPushButton("10条血条", dialog)
-    btn_20 = QPushButton("20条血条", dialog)
-    btn_custom = QPushButton("自定义...", dialog)
-    
-    button_layout.addWidget(btn_5)
-    button_layout.addWidget(btn_10)
-    button_layout.addWidget(btn_20)
-    button_layout.addWidget(btn_custom)
-    
-    layout.addLayout(button_layout)
-    
-    # 用于存储选择结果
-    result = [5]  # 默认为5条
-    
-    # 连接按钮信号
-    def on_btn_5_clicked():
-        result[0] = 5
-        dialog.accept()
-        
-    def on_btn_10_clicked():
-        result[0] = 10
-        dialog.accept()
-        
-    def on_btn_20_clicked():
-        result[0] = 20
-        dialog.accept()
-        
-    def on_btn_custom_clicked():
-        # 显示自定义数量输入对话框
-        custom_num, ok = QInputDialog.getInt(
-            dialog, 
-            "自定义血条数量", 
-            "请输入要校准的血条数量：",
-            5, 1, 50, 1
-        )
-        if ok:
-            result[0] = custom_num
-            dialog.accept()
-    
-    btn_5.clicked.connect(on_btn_5_clicked)
-    btn_10.clicked.connect(on_btn_10_clicked)
-    btn_20.clicked.connect(on_btn_20_clicked)
-    btn_custom.clicked.connect(on_btn_custom_clicked)
-    
-    # 添加取消按钮
-    cancel_layout = QHBoxLayout()
-    cancel_btn = QPushButton("取消", dialog)
-    cancel_btn.clicked.connect(dialog.reject)
-    cancel_layout.addStretch()
-    cancel_layout.addWidget(cancel_btn)
-    layout.addLayout(cancel_layout)
-    
-    # 设置对话框样式
-    dialog.setStyleSheet("""
-        QDialog {
-            background-color: #f5f5f5;
-        }
-        QLabel {
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-        QPushButton {
-            min-width: 100px;
-            min-height: 30px;
-            padding: 5px;
-            font-size: 13px;
-        }
-    """)
-    
-    # 显示对话框并等待用户选择
-    if dialog.exec() == QDialog.Accepted:
-        return result[0]
+    # 创建并显示对话框
+    dialog = BarCountSelectionMessageBox(parent)
+    if dialog.exec():
+        return dialog.result
     else:
         return 0
 

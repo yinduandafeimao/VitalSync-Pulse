@@ -132,8 +132,8 @@ def get_hp_percentage(x1, y1, x2, y2, hp_color_lower, hp_color_upper):
     参数:
         x1, y1 (int): 血条框左上角坐标
         x2, y2 (int): 血条框右下角坐标
-        hp_color_lower (np.array): 血条颜色的HSV下限
-        hp_color_upper (np.array): 血条颜色的HSV上限
+        hp_color_lower (np.array): 血条颜色的BGR下限 (注意：这里之前文档写的是HSV，但fluent_ui.py传入的是BGR)
+        hp_color_upper (np.array): 血条颜色的BGR上限 (注意：这里之前文档写的是HSV，但fluent_ui.py传入的是BGR)
     
     返回:
         float: 血量百分比（0-100）
@@ -148,20 +148,17 @@ def get_hp_percentage(x1, y1, x2, y2, hp_color_lower, hp_color_upper):
         
     # 截取屏幕指定区域
     try:
-        # 调试输出
-        print(f"尝试获取区域：({x1}, {y1}) - ({x2}, {y2}), 宽度x高度: {x2-x1}x{y2-y1}")
-        
         screenshot = pyautogui.screenshot(region=(x1, y1, x2-x1, y2-y1))
         frame = np.array(screenshot)
         
-        # 转换为OpenCV格式
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # 转换为OpenCV格式 (原始截图是RGB)
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) # 从RGB转为BGR
     
-        # 转换到HSV色彩空间
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        # 注意：这里的颜色匹配是在BGR空间进行的，因为fluent_ui.py中取色后直接保存的是BGR范围
+        # 如果期望在HSV空间匹配，则frame_bgr需要先转换为HSV，并且hp_color_lower/upper也应该是HSV格式
         
-        # 创建血条颜色的掩码
-        mask = cv2.inRange(hsv, hp_color_lower, hp_color_upper)
+        # 创建血条颜色的掩码 (在BGR空间)
+        mask = cv2.inRange(frame_bgr, hp_color_lower, hp_color_upper)
         
         # 调试输出：掩码信息
         white_pixels = np.sum(mask > 0)
