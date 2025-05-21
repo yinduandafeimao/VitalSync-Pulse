@@ -1,50 +1,50 @@
 {
     "calibration_sets": {
-        "5条血条_05131712": {
+        "5条血条_05211022": {
             "count": 5,
-            "calibration_time": "2025-05-13 17:13:18",
+            "calibration_time": "2025-05-21 10:22:47",
             "health_bars": [
                 {
                     "x1": 874,
-                    "y1": 353,
-                    "x2": 1046,
-                    "y2": 421,
+                    "y1": 398,
+                    "x2": 1045,
+                    "y2": 464,
                     "recognition_done": true,
                     "name": "英短肥猫",
                     "profession": "汐灵汐"
                 },
                 {
                     "x1": 874,
-                    "y1": 427,
+                    "y1": 472,
                     "x2": 1045,
-                    "y2": 493,
+                    "y2": 536,
                     "recognition_done": true,
                     "name": "鬼王宗弟子",
-                    "profession": "未知"
+                    "profession": "鬼王"
                 },
                 {
-                    "x1": 874,
-                    "y1": 500,
+                    "x1": 875,
+                    "y1": 546,
                     "x2": 1045,
-                    "y2": 564,
+                    "y2": 612,
                     "recognition_done": true,
                     "name": "合欢派弟子",
                     "profession": "未知"
                 },
                 {
                     "x1": 874,
-                    "y1": 573,
+                    "y1": 619,
                     "x2": 1045,
-                    "y2": 638,
+                    "y2": 684,
                     "recognition_done": true,
                     "name": "焚香谷弟子",
                     "profession": "未知"
                 },
                 {
-                    "x1": 874,
-                    "y1": 647,
-                    "x2": 1045,
-                    "y2": 710,
+                    "x1": 875,
+                    "y1": 691,
+                    "x2": 1046,
+                    "y2": 759,
                     "recognition_done": true,
                     "name": "青云门弟子",
                     "profession": "未知"
@@ -52,5 +52,5 @@
             ]
         }
     },
-    "last_used": "5条血条_05131712"
+    "last_used": "5条血条_05211022"
 }
