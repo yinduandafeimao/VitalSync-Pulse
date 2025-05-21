@@ -83,7 +83,7 @@ class HealthBarCalibration:
                         self.calibration_sets = data['calibration_sets']
                         print(f"校准集数量: {len(self.calibration_sets)}")
                         print(f"校准集名称: {list(self.calibration_sets.keys())}")
-                        
+                    
                         # 加载最后使用的校准集
                         if 'last_used' in data and data['last_used'] in self.calibration_sets:
                             self.current_set_name = data['last_used']
@@ -91,7 +91,7 @@ class HealthBarCalibration:
                             print(f"加载最后使用的校准集: {self.current_set_name}")
                         else:
                             print("无最后使用的校准集或其已不存在")
-                        
+                    
                         return len(self.calibration_sets) > 0
                     else:
                         print("校准文件中找不到有效的校准集数据")

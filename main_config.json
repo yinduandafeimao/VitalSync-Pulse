@@ -1,0 +1,47 @@
+{
+    "voice_settings": {
+        "rate": 5,
+        "volume": 80,
+        "selected_voice": "晓晓 (普通话女)"
+    },
+    "low_health_alert_settings": {
+        "enabled": true,
+        "threshold": 30.0,
+        "cooldown": 5.0,
+        "warning_text": "{name}血量过低，仅剩{health}%",
+        "team_danger_enabled": true,
+        "team_danger_threshold": 2,
+        "team_danger_text": "警告，团队状态危险，{count}名队友血量过低"
+    },
+    "default_hp_color": {
+        "lower": [
+            0,
+            0,
+            160
+        ],
+        "upper": [
+            80,
+            80,
+            255
+        ]
+    },
+    "auto_select": {
+        "enabled": false,
+        "health_threshold": 30.0,
+        "cooldown_time": 3.0,
+        "priority_roles": [
+            "奶妈",
+            "治疗"
+        ],
+        "priority_profession": ""
+    },
+    "hotkeys": {
+        "start_monitoring": "f9",
+        "stop_monitoring": "f10"
+    },
+    "ui_settings": {
+        "theme": "跟随系统",
+        "language": "zh_CN",
+        "auto_start": false
+    }
+}

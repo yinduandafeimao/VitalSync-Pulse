@@ -75,106 +75,49 @@ class HealthMonitor:
         
         # 注册全局快捷键
         self.register_hotkeys()
-    
+        
     def load_hotkey_config(self):
         """加载快捷键配置"""
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "hotkeys_config.json")
+            # 使用配置管理器获取快捷键配置
+            from config_manager import get_config
+            config_manager = get_config()
             
-            if not os.path.exists(config_file):
-                # 创建默认配置
+            # 获取快捷键配置
+            hotkeys = config_manager.get_json('hotkeys', {})
+            if hotkeys:
+                self.start_monitoring_hotkey = hotkeys.get('start_monitoring', 'f9')
+                self.stop_monitoring_hotkey = hotkeys.get('stop_monitoring', 'f10')
+                print(f"已加载快捷键配置: 开始监控={self.start_monitoring_hotkey}, 停止监控={self.stop_monitoring_hotkey}")
+            else:
+                # 如果配置不存在，创建默认配置
                 self.save_hotkey_config()
-                return
-                
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                
-                if 'hotkeys' in config:
-                    hotkeys = config['hotkeys']
-                    self.start_monitoring_hotkey = hotkeys.get('start_monitoring', 'f9')
-                    self.stop_monitoring_hotkey = hotkeys.get('stop_monitoring', 'f10')
-                    print(f"已加载快捷键配置: 开始监控={self.start_monitoring_hotkey}, 停止监控={self.stop_monitoring_hotkey}")
         
         except Exception as e:
             print(f"加载快捷键配置失败: {str(e)}")
             # 使用默认值
-    
+        
     def save_hotkey_config(self):
         """保存快捷键配置"""
-        temp_file = None
-        
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "hotkeys_config.json")
+            # 使用配置管理器保存快捷键配置
+            from config_manager import get_config
+            config_manager = get_config()
             
-            config = {
-                'hotkeys': {
-                    'start_monitoring': self.start_monitoring_hotkey,
-                    'stop_monitoring': self.stop_monitoring_hotkey
-                }
+            # 设置快捷键配置
+            hotkeys = {
+                'start_monitoring': self.start_monitoring_hotkey,
+                'stop_monitoring': self.stop_monitoring_hotkey
             }
+            config_manager.set_json('hotkeys', hotkeys)
             
-            # 使用临时文件保存
-            import uuid
-            temp_file = config_file + f'.tmp.{uuid.uuid4().hex[:8]}'
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-            
-            # 检查临时文件是否正确创建
-            if not os.path.exists(temp_file):
-                print(f"临时配置文件未能创建: {temp_file}")
-                return False
-                
-            # 如果保存成功，替换原文件
-            if os.path.exists(config_file):
-                # 在Windows上，有时需要多次尝试删除文件
-                max_attempts = 3
-                for attempt in range(max_attempts):
-                    try:
-                        os.remove(config_file)
-                        break
-                    except Exception as e:
-                        print(f"尝试 {attempt+1}/{max_attempts} 删除原配置文件失败: {str(e)}")
-                        time.sleep(0.1)
-                        if attempt == max_attempts - 1:  # 最后一次尝试
-                            print(f"无法删除原配置文件，将尝试直接重命名")
-            
-            # 重命名临时文件为正式配置文件
-            try:
-                os.rename(temp_file, config_file)
-            except Exception as e:
-                print(f"重命名临时文件失败: {str(e)}")
-                # 如果重命名失败，但临时文件存在，尝试复制内容
-                if os.path.exists(temp_file):
-                    try:
-                        with open(temp_file, 'r', encoding='utf-8') as src:
-                            content = src.read()
-                        with open(config_file, 'w', encoding='utf-8') as dest:
-                            dest.write(content)
-                        print(f"通过复制内容方式保存配置")
-                        # 尝试删除临时文件
-                        try:
-                            os.remove(temp_file)
-                        except:
-                            pass
-                    except Exception as copy_err:
-                        print(f"复制配置内容失败: {str(copy_err)}")
-                        return False
-                else:
-                    return False
-            
-            print(f"已成功保存快捷键配置到: {config_file}")
+            # 保存配置
+            config_manager.save_config()
+            print("已保存快捷键配置")
             return True
             
         except Exception as e:
             print(f"保存快捷键配置失败: {str(e)}")
-            # 如果临时文件存在，清理它
-            if temp_file and os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
             return False
     
     def register_hotkeys(self):
@@ -709,54 +652,51 @@ class HealthMonitor:
             print(f"停止监控时出错: {str(e)}")
             
         print("资源释放完成")
-    
+
     def load_auto_select_config(self):
         """加载自动选择配置"""
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "auto_select_config.json")
+            # 使用配置管理器获取自动选择配置
+            from config_manager import get_config
+            config_manager = get_config()
             
-            if not os.path.exists(config_file):
-                # 创建默认配置
+            # 获取自动选择配置
+            auto_select = config_manager.get_json('auto_select', {})
+            if auto_select:
+                self.auto_select_enabled = auto_select.get('enabled', False)
+                self.health_threshold = auto_select.get('health_threshold', 50.0)
+                self.cooldown_time = auto_select.get('cooldown_time', 2.0)
+                self.priority_roles = auto_select.get('priority_roles', [])
+                self.priority_profession = auto_select.get('priority_profession', None)
+                print(f"已加载自动选择配置: 启用={self.auto_select_enabled}, 血量阈值={self.health_threshold}, 冷却时间={self.cooldown_time}")
+            else:
+                # 如果配置不存在，创建默认配置
                 self.save_auto_select_config()
-                return
-                
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                
-                if 'auto_select' in config:
-                    auto_select = config['auto_select']
-                    self.auto_select_enabled = auto_select.get('enabled', False)
-                    self.health_threshold = auto_select.get('health_threshold', 50.0)
-                    self.cooldown_time = auto_select.get('cooldown_time', 2.0)
-                    self.priority_roles = auto_select.get('priority_roles', [])
-                    self.priority_profession = auto_select.get('priority_profession', None)
-                    print(f"已加载自动选择配置: 启用={self.auto_select_enabled}, 血量阈值={self.health_threshold}, 冷却时间={self.cooldown_time}")
         
         except Exception as e:
             print(f"加载自动选择配置失败: {str(e)}")
             # 使用默认值
-    
+
     def save_auto_select_config(self):
         """保存自动选择配置"""
         try:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-            config_file = os.path.join(config_dir, "auto_select_config.json")
+            # 使用配置管理器保存自动选择配置
+            from config_manager import get_config
+            config_manager = get_config()
             
-            config = {
-                'auto_select': {
-                    'enabled': self.auto_select_enabled,
-                    'health_threshold': self.health_threshold,
-                    'cooldown_time': self.cooldown_time,
-                    'priority_roles': self.priority_roles,
-                    'priority_profession': self.priority_profession
-                }
+            # 设置自动选择配置
+            auto_select = {
+                'enabled': self.auto_select_enabled,
+                'health_threshold': self.health_threshold,
+                'cooldown_time': self.cooldown_time,
+                'priority_roles': self.priority_roles,
+                'priority_profession': self.priority_profession
             }
+            config_manager.set_json('auto_select', auto_select)
             
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-            
-            print(f"已成功保存自动选择配置")
+            # 保存配置
+            config_manager.save_config()
+            print("已成功保存自动选择配置")
             return True
             
         except Exception as e:
