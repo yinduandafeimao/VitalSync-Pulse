@@ -68,23 +68,51 @@ class HealthBarCalibration:
     def load_all_calibration_sets(self):
         """加载所有校准数据集"""
         if not os.path.exists(self.calibration_file):
+            print(f"校准文件 {self.calibration_file} 不存在")
             self.calibration_sets = {}
             return False
             
         try:
+            print(f"尝试加载校准文件: {self.calibration_file}")
             with open(self.calibration_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if 'calibration_sets' in data and isinstance(data['calibration_sets'], dict):
-                    self.calibration_sets = data['calibration_sets']
+                try:
+                    data = json.load(f)
+                    print("JSON解析成功")
                     
-                    # 加载最后使用的校准集
-                    if 'last_used' in data and data['last_used'] in self.calibration_sets:
-                        self.current_set_name = data['last_used']
-                        self.health_bars = self.calibration_sets[self.current_set_name]['health_bars']
-                    
-                    return len(self.calibration_sets) > 0
+                    if 'calibration_sets' in data and isinstance(data['calibration_sets'], dict):
+                        self.calibration_sets = data['calibration_sets']
+                        print(f"校准集数量: {len(self.calibration_sets)}")
+                        print(f"校准集名称: {list(self.calibration_sets.keys())}")
+                        
+                        # 加载最后使用的校准集
+                        if 'last_used' in data and data['last_used'] in self.calibration_sets:
+                            self.current_set_name = data['last_used']
+                            self.health_bars = self.calibration_sets[self.current_set_name]['health_bars']
+                            print(f"加载最后使用的校准集: {self.current_set_name}")
+                        else:
+                            print("无最后使用的校准集或其已不存在")
+                        
+                        return len(self.calibration_sets) > 0
+                    else:
+                        print("校准文件中找不到有效的校准集数据")
+                except json.JSONDecodeError as json_err:
+                    print(f"校准文件JSON解析失败: {json_err}")
+                    # 尝试不同的编码方式
+                    f.seek(0)
+                    content = f.read()
+                    try:
+                        # 尝试用不同的方式手动解析
+                        data = json.loads(content)
+                        if 'calibration_sets' in data and isinstance(data['calibration_sets'], dict):
+                            self.calibration_sets = data['calibration_sets']
+                            print(f"使用替代方法成功加载校准集: {len(self.calibration_sets)}")
+                            return len(self.calibration_sets) > 0
+                    except Exception as alt_err:
+                        print(f"替代解析方法也失败: {alt_err}")
         except Exception as e:
             print(f"加载血条校准数据失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
         return False
     

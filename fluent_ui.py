@@ -1728,6 +1728,1545 @@ class MainWindow(FluentWindow):
                 orient=Qt.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
+                parent=self
+            )
+
+class HotkeySettingsMessageBox(MessageBoxBase):
+    """ Custom message box for hotkey settings """
+
+    def __init__(self, health_monitor, parent=None):
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel('监控快捷键设置', self)
+        self.health_monitor = health_monitor
+        self.parent_window = parent
+        
+        # 当前快捷键展示
+        self.infoLabel = BodyLabel(f"当前快捷键设置:\n开始监控: {health_monitor.start_monitoring_hotkey}\n停止监控: {health_monitor.stop_monitoring_hotkey}")
+        self.infoLabel.setWordWrap(True)
+        
+        # 设置表单
+        form_widget = QWidget()
+        form_layout = QGridLayout(form_widget)
+        form_layout.setSpacing(10)
+        
+        # 开始监控输入
+        self.start_label = BodyLabel("开始监控键:")
+        self.start_input = LineEdit()
+        self.start_input.setText(health_monitor.start_monitoring_hotkey)
+        self.start_input.setPlaceholderText("按下快捷键组合")
+        
+        # 停止监控输入
+        self.stop_label = BodyLabel("停止监控键:")
+        self.stop_input = LineEdit()
+        self.stop_input.setText(health_monitor.stop_monitoring_hotkey)
+        self.stop_input.setPlaceholderText("按下快捷键组合")
+        
+        # 错误提示标签
+        self.error_label = CaptionLabel("")
+        self.error_label.setTextColor("#cf1010", QColor(255, 28, 32))
+        self.error_label.hide()
+        
+        # 增加记录按钮以记录实际按键
+        self.start_record = PushButton("记录")
+        self.start_record.clicked.connect(lambda: self.record_hotkey('start'))
+        
+        self.stop_record = PushButton("记录")
+        self.stop_record.clicked.connect(lambda: self.record_hotkey('stop'))
+        
+        # 添加到布局
+        form_layout.addWidget(self.start_label, 0, 0)
+        form_layout.addWidget(self.start_input, 0, 1)
+        form_layout.addWidget(self.start_record, 0, 2)
+        
+        form_layout.addWidget(self.stop_label, 1, 0)
+        form_layout.addWidget(self.stop_input, 1, 1)
+        form_layout.addWidget(self.stop_record, 1, 2)
+        
+        # 将所有控件添加到视图布局
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.infoLabel)
+        self.viewLayout.addWidget(form_widget)
+        self.viewLayout.addWidget(self.error_label)
+        
+        # 设置按钮文本
+        self.yesButton.setText('保存')
+        self.cancelButton.setText('取消')
+        
+        # 设置最小宽度
+        self.widget.setMinimumWidth(400)
+    
+    def record_hotkey(self, which):
+        """弹出对话框录入快捷键"""
+        from PyQt5.QtGui import QKeySequence
+        
+        # 创建录入对话框
+        dialog = MessageBoxBase(self)
+        dialog.titleLabel = SubtitleLabel('录入快捷键', dialog)
+        
+        # 说明标签
+        guide_label = BodyLabel('请按下新的快捷键组合（如 Ctrl+Alt+S）')
+        key_label = BodyLabel('等待按键...')
+        
+        # 添加到视图布局
+        dialog.viewLayout.addWidget(dialog.titleLabel)
+        dialog.viewLayout.addWidget(guide_label)
+        dialog.viewLayout.addWidget(key_label)
+        
+        # 设置按钮文本，初始时禁用确定按钮
+        dialog.yesButton.setText('确定')
+        dialog.yesButton.setEnabled(False)
+        dialog.cancelButton.setText('取消')
+        
+        # 存储按键
+        key_seq = {'text': ''}
+        
+        # 重写keyPressEvent处理按键
+        def keyPressEvent(event):
+            # 保存原始方法
+            original_keyPressEvent = dialog.keyPressEvent
+            
+            key_text = ''
+            modifiers = event.modifiers()
+            if modifiers & Qt.ControlModifier:
+                key_text += 'ctrl+'
+            if modifiers & Qt.AltModifier:
+                key_text += 'alt+'
+            if modifiers & Qt.ShiftModifier:
+                key_text += 'shift+'
+            key = event.key()
+            if key in (Qt.Key_Control, Qt.Key_Alt, Qt.Key_Shift):
+                # 恢复原始方法并调用它
+                dialog.keyPressEvent = original_keyPressEvent
+                return original_keyPressEvent(event)
+            key_name = QKeySequence(key).toString().lower()
+            key_text += key_name
+            key_seq['text'] = key_text
+            key_label.setText(f'已录入: {key_text}')
+            dialog.yesButton.setEnabled(True)
+            
+            # 恢复原始方法
+            dialog.keyPressEvent = original_keyPressEvent
+        
+        # 保存原始方法
+        original_method = dialog.keyPressEvent
+        # 替换方法
+        dialog.keyPressEvent = keyPressEvent
+        
+        # 显示对话框
+        if dialog.exec():
+            if key_seq['text']:
+                if which == 'start':
+                    self.start_input.setText(key_seq['text'])
+                else:
+                    self.stop_input.setText(key_seq['text'])
+    
+    def validate(self):
+        """验证输入是否有效"""
+        start_key = self.start_input.text()
+        stop_key = self.stop_input.text()
+        
+        # 检查输入是否有效
+        if not start_key or not stop_key:
+            self.error_label.setText("快捷键不能为空")
+            self.error_label.show()
+            return False
+            
+        if start_key == stop_key:
+            self.error_label.setText("开始和停止快捷键不能相同")
+            self.error_label.show()
+            return False
+        
+        # 尝试设置新的快捷键
+        success = self.health_monitor.set_hotkeys(start_key, stop_key)
+        
+        if not success:
+            self.error_label.setText("设置快捷键失败，请重试")
+            self.error_label.show()
+            return False
+            
+        return True
+
+class TeammateSelectionMessageBox(MessageBoxBase):
+    """ Custom message box for teammate selection """
+
+    def __init__(self, title, team_members, parent=None):
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel(title, self)
+        
+        # 添加说明
+        self.infoLabel = BodyLabel("请从列表中选择一个队友")
+        
+        # 创建队友列表
+        self.listWidget = QListWidget(self)
+        for i, member in enumerate(team_members):
+            self.listWidget.addItem(f"{member.name} ({member.profession})")
+        
+        # 警告标签
+        self.warningLabel = CaptionLabel("未选择任何队友")
+        self.warningLabel.setTextColor("#cf1010", QColor(255, 28, 32))
+        self.warningLabel.hide()  # 默认隐藏
+        
+        # 添加到视图布局
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.infoLabel)
+        self.viewLayout.addWidget(self.listWidget)
+        self.viewLayout.addWidget(self.warningLabel)
+        
+        # 设置按钮文本
+        self.yesButton.setText('选择')
+        self.cancelButton.setText('取消')
+        
+        # 设置最小宽度
+        self.widget.setMinimumWidth(350)
+        
+        # 存储队友列表
+        self.team_members = team_members
+        self.selected_index = -1
+        
+        # 连接列表点击事件
+        self.listWidget.itemClicked.connect(self.on_item_clicked)
+    
+    def on_item_clicked(self, item):
+        """列表项被点击时更新选择索引"""
+        self.selected_index = self.listWidget.row(item)
+        self.warningLabel.hide()  # 隐藏警告
+    
+    def get_selected_member(self):
+        """获取选中的队友"""
+        if self.selected_index >= 0 and self.selected_index < len(self.team_members):
+            return self.team_members[self.selected_index]
+        return None
+        
+    def validate(self):
+        """验证是否选择了队友"""
+        if self.selected_index >= 0:
+            return True
+        else:
+            self.warningLabel.show()  # 显示警告
+            return False
+
+class UnifiedColorPickerMessageBox(MessageBoxBase):
+    """ Custom message box for unified color picking """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel('统一设置所有队友的血条颜色', self)
+        
+        # 添加操作指南
+        self.guideLabel = BodyLabel(
+            '1. 将鼠标移动到游戏中任意一个队友的血条上\n'
+            '2. 选择血条最具代表性的颜色位置\n'
+            '3. 按下空格键获取颜色，此颜色将应用于所有队友\n'
+            '4. 按ESC键取消操作'
+        )
+        self.guideLabel.setWordWrap(True)
+        
+        # 状态标签
+        self.statusLabel = CaptionLabel("状态：等待获取颜色...")
+        self.statusLabel.setTextColor("#1e88e5", QColor(30, 136, 229))
+        
+        # 预览区域
+        previewLayout = QHBoxLayout()
+        previewLabel = BodyLabel('颜色预览：')
+        self.colorPreview = QFrame()
+        self.colorPreview.setFixedSize(50, 20)
+        self.colorPreview.setFrameShape(QFrame.Box)
+        previewLayout.addWidget(previewLabel)
+        previewLayout.addWidget(self.colorPreview)
+        previewWidget = QWidget()
+        previewWidget.setLayout(previewLayout)
+        
+        # 添加到视图布局
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.guideLabel)
+        self.viewLayout.addWidget(self.statusLabel)
+        self.viewLayout.addWidget(previewWidget)
+        
+        # 设置按钮文本
+        self.yesButton.setText('确定')
+        self.cancelButton.setText('取消')
+        
+        # 设置最小宽度
+        self.widget.setMinimumWidth(350)
+        
+        # 颜色获取状态和计时器
+        self.color_captured = False
+        self.key_check_timer = QTimer(self)
+        self.key_check_timer.timeout.connect(self.check_keys_and_position)
+        self.key_check_timer.start(100)
+        
+        # 存储获取的颜色值
+        self.pixel_color_rgb = None
+
+    def check_keys_and_position(self):
+        """检查键盘输入和鼠标位置"""
+        import keyboard
+        if keyboard.is_pressed('space'):
+            if self.color_captured:
+                return
+            
+            self.color_captured = True
+            self.key_check_timer.stop()
+            
+            try:
+                import pyautogui
+                x, y = pyautogui.position()
+                self.pixel_color_rgb = pyautogui.screenshot().getpixel((x, y))[:3]  # 确保是RGB
+                
+                color_hex = "#{:02x}{:02x}{:02x}".format(
+                    self.pixel_color_rgb[0], 
+                    self.pixel_color_rgb[1], 
+                    self.pixel_color_rgb[2]
+                )
+                self.colorPreview.setStyleSheet(f"background-color: {color_hex};")
+                
+                self.statusLabel.setText(f"状态：成功获取颜色！RGB: {self.pixel_color_rgb}")
+                self.statusLabel.setTextColor("#2ecc71", QColor(46, 204, 113))
+                
+                # 延迟关闭对话框
+                QTimer.singleShot(2000, lambda: self.accept())
+                
+            except Exception as e:
+                self.statusLabel.setText(f"状态：获取颜色失败 - {str(e)}")
+                self.statusLabel.setTextColor("#e74c3c", QColor(231, 76, 60))
+                self.color_captured = False
+                self.key_check_timer.start()
+        
+        elif keyboard.is_pressed('esc'):
+            if not self.color_captured:
+                self.key_check_timer.stop()
+                self.reject()
+
+class MainWindow(FluentWindow):
+    def __init__(self):
+        """初始化主窗口"""
+        super().__init__()
+        
+        # 初始化 pygame mixer
+        try:
+            pygame.mixer.init()
+            pygame.mixer.set_num_channels(16) # 设置足够多的声道
+        except pygame.error as e:
+            print(f"Pygame mixer 初始化失败: {e}")
+            # 可以选择禁用语音功能或显示错误提示
+            InfoBar.error(
+                title='音频初始化失败',
+                content='无法初始化音频播放组件 (pygame.mixer)，语音播报功能将不可用。',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+                parent=self
+            )
+        
+        self._icon_capture_show_selection_timer = None
+        self._icon_capture_do_grab_timer = None
+        self._icon_capture_rect = None # Store the rect between timer calls
+        
+        # --- 添加缺失的语音参数初始化 ---
+        # 初始化语音参数属性 - 使用滑块的默认值
+        # 语速: slider 0-10 -> rate -50% to +50% -> + (value*10 - 50) %
+        default_rate_value = 5
+        self.voice_rate_param = f'+{default_rate_value * 10 - 50}%'
+        # 音量: slider 0-100 -> volume -50% to +50% -> + (value - 50) %
+        default_volume_value = 80
+        self.voice_volume_param = f'+{default_volume_value - 50}%'
+        # --- 初始化结束 ---
+        
+        # 设置窗口标题和大小
+        self.setWindowTitle('VitalSync')
+        self.resize(1200, 500) # 将高度从 800 调整为 700
+        
+        # 设置应用强调色 - 使用截图中的青绿色
+        setThemeColor(QColor(0, 168, 174))
+        
+        # 启用亚克力效果
+        self.navigationInterface.setAcrylicEnabled(True)
+        
+        # 初始化队友管理相关属性
+        self.team = Team()  # 创建Team实例
+        self.selection_box = None # 屏幕选择框
+        
+        # 初始化全局默认血条颜色
+        self.default_hp_color_lower = None  # 默认血条颜色下限
+        self.default_hp_color_upper = None  # 默认血条颜色上限
+        self.load_default_colors()  # 从配置加载默认颜色设置
+        
+        # 初始化健康监控相关属性
+        self.health_monitor = HealthMonitor(self.team)  # 创建健康监控实例
+        # 连接监控信号
+        self.health_monitor.signals.update_signal.connect(self.update_health_display)
+        self.health_monitor.signals.status_signal.connect(self.update_monitor_status)
+        
+        # 创建界面
+        self.teamRecognitionInterface = QWidget()
+        self.teamRecognitionInterface.setObjectName("teamRecognitionInterface")
+        
+        self.healthMonitorInterface = QWidget()
+        self.healthMonitorInterface.setObjectName("healthMonitorInterface")
+        
+        self.assistInterface = QWidget()
+        self.assistInterface.setObjectName("assistInterface")
+        
+        self.settingsInterface = QWidget()
+        self.settingsInterface.setObjectName("settingsInterface")
+        
+        # 新增：语音设置界面实例
+        self.voiceSettingsInterface = QWidget()
+        self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
+        
+        # 初始化界面
+        self.initTeamRecognitionInterface()
+        self.initHealthMonitorInterface()
+        self.initAssistInterface()
+        self.initSettingsInterface()
+        self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
+        
+        # 初始化导航
+        self.initNavigation()
+        
+        # --- 加载设置 ---
+        self.load_settings() # 在UI初始化后加载设置
+        
+        # 显示提示信息
+        InfoBar.success(
+            title='初始化完成',
+            content='系统已准备就绪',
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=2000,
+            parent=self
+        )
+        
+        # 在__init__方法末尾添加：
+        self.load_teammates()
+        
+        # 初始化语音队列和工作线程
+        self.speech_queue = queue.Queue()
+        self.active_speech = {} # 用于跟踪正在播放的语音及其资源
+        self.speech_worker_thread = threading.Thread(target=self._speech_worker_loop, daemon=True)
+        self.speech_worker_thread.start()
+        
+        # 设置一个定时器来处理 Pygame 事件和清理
+        self.pygame_event_timer = QTimer(self)
+        self.pygame_event_timer.timeout.connect(self._process_pygame_events)
+        self.pygame_event_timer.start(100) # 每 100ms 检查一次
+    
+    def initNavigation(self):
+        """初始化导航栏"""
+        # 添加子界面
+        self.addSubInterface(self.teamRecognitionInterface, FIF.PEOPLE, '队员识别')
+        self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
+        self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
+        self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
+        
+        # 添加底部界面
+        self.addSubInterface(
+            self.settingsInterface, 
+            FIF.SETTING, 
+            '系统设置',
+            NavigationItemPosition.BOTTOM
+        )
+
+    def initTeamRecognitionInterface(self):
+        """初始化队员识别界面"""
+        layout = QVBoxLayout(self.teamRecognitionInterface)
+        layout.setSpacing(24)  # 增加垂直间距
+        layout.setContentsMargins(24, 24, 24, 24)  # 增加外边距
+        
+        # 创建顶部水平布局，包含职业图标管理和队友管理
+        topLayout = QHBoxLayout()
+        topLayout.setSpacing(24)  # 增加水平间距
+        
+        # ========== 左侧：职业图标管理 ==========
+        iconCard = HeaderCardWidget(self.teamRecognitionInterface)
+        iconCard.setTitle("职业图标管理")
+        iconCard.setFixedHeight(200)  # 适当减少卡片高度
+        iconLayout = QVBoxLayout()
+        iconLayout.setSpacing(15)  # 增加垂直间距
+        iconLayout.setContentsMargins(0, 10, 0, 10)  # 增加内边距
+        
+        # 按钮区域 - 也使用网格布局
+        btnLayout = QGridLayout()
+        btnLayout.setSpacing(15)  # 增加按钮间距
+        
+        addIconBtn = PrimaryPushButton('添加图标')
+        addIconBtn.setIcon(FIF.ADD)
+        addIconBtn.setFixedWidth(140)  # 显著增加按钮宽度
+        addIconBtn.setMinimumHeight(36)  # 设置最小高度
+        
+        captureIconBtn = PushButton('截取图标')
+        captureIconBtn.setIcon(FIF.CAMERA) # 使用 CAMERA 图标替代 SCREENSHOT
+        captureIconBtn.setFixedWidth(140)  # 显著增加按钮宽度
+        captureIconBtn.setMinimumHeight(36)  # 设置最小高度
+        
+        manageIconsBtn = PushButton('管理图标')
+        manageIconsBtn.setIcon(FIF.SETTING)
+        manageIconsBtn.setFixedWidth(140)  # 显著增加按钮宽度
+        manageIconsBtn.setMinimumHeight(36)  # 设置最小高度
+        
+        # 连接按钮事件
+        addIconBtn.clicked.connect(self.addProfessionIcon)
+        captureIconBtn.clicked.connect(self.captureScreenIcon)
+        manageIconsBtn.clicked.connect(self.loadProfessionIcons)
+        
+        # 将按钮添加到网格布局
+        btnLayout.addWidget(addIconBtn, 0, 0)
+        btnLayout.addWidget(captureIconBtn, 0, 1)
+        btnLayout.addWidget(manageIconsBtn, 0, 2)
+        
+        # 显示图标数量信息
+        profession_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons")
+        
+        # 检查文件夹是否存在
+        if not os.path.exists(profession_path):
+            os.makedirs(profession_path)
+            icon_count = 0
+        else:
+            icon_count = len([f for f in os.listdir(profession_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
+            
+        infoLabel = BodyLabel(f'已加载 {icon_count} 个职业图标')
+        infoLabel.setStyleSheet("color: #666; font-size: 13px;")  # 设置样式，使其显示更清晰
+        infoLabel.setAlignment(Qt.AlignCenter)  # 居中对齐
+        
+        # 添加到卡片布局
+        iconLayout.addLayout(btnLayout)
+        iconLayout.addWidget(infoLabel)
+        iconLayout.addStretch(1)  # 添加弹性空间，将内容推向顶部，使标签居中
+        iconCardWidget = QWidget()
+        iconCardWidget.setLayout(iconLayout)
+        iconCard.viewLayout.addWidget(iconCardWidget)
+        self.iconCardWidget = iconCardWidget
+        
+        # ========== 右侧：队友管理 ==========
+        teammateCard = HeaderCardWidget(self.teamRecognitionInterface)
+        teammateCard.setTitle("队友管理")
+        teammateCard.setFixedHeight(200)  # 适当减少卡片高度
+        teammateLayout = QVBoxLayout()
+        teammateLayout.setSpacing(30)  # 增加垂直间距
+        teammateLayout.setContentsMargins(0, 0, 0, 10)  # 顶部margin设为0，整体上移
+        
+        # 队友管理按钮区域 - 使用网格布局确保均匀分布
+        teammateBtnLayout = QGridLayout()  # 改回网格布局
+        teammateBtnLayout.setSpacing(18)  # 进一步增加基础间距 (原为15)
+        teammateBtnLayout.setVerticalSpacing(48)  # 大幅增大垂直间距 (原为20)
+        teammateBtnLayout.setContentsMargins(10, 0, 10, 0)  # 保持或调整水平内边距
+        
+        addTeammateBtn = PrimaryPushButton('添加队友')
+        addTeammateBtn.setIcon(FIF.ADD)
+        addTeammateBtn.setFixedWidth(115)  # 进一步减少按钮宽度 (原为125)
+        addTeammateBtn.setMinimumHeight(36)  # 保持按钮高度
+        
+        removeTeammateBtn = PushButton('移除队友')
+        removeTeammateBtn.setIcon(FIF.REMOVE)
+        removeTeammateBtn.setFixedWidth(115)  # 进一步减少按钮宽度 (原为125)
+        removeTeammateBtn.setMinimumHeight(36)  # 保持按钮高度
+        
+        loadTeammateBtn = PushButton('加载队友')
+        loadTeammateBtn.setIcon(FIF.DOWNLOAD)
+        loadTeammateBtn.setFixedWidth(115)  # 进一步减少按钮宽度 (原为125)
+        loadTeammateBtn.setMinimumHeight(36)  # 保持按钮高度
+        
+        clearAllTeammatesBtn = PushButton('清除全部')
+        clearAllTeammatesBtn.setIcon(FIF.DELETE)
+        clearAllTeammatesBtn.setFixedWidth(115)  # 进一步减少按钮宽度 (原为125)
+        clearAllTeammatesBtn.setMinimumHeight(36)  # 保持按钮高度
+        
+        # 连接按钮事件
+        addTeammateBtn.clicked.connect(self.addTeammate)
+        removeTeammateBtn.clicked.connect(self.removeTeammate)
+        loadTeammateBtn.clicked.connect(self.loadTeammate)
+        clearAllTeammatesBtn.clicked.connect(self.clearAllTeammates)
+        
+        # 使用网格布局均匀排列按钮，2行2列，修正行号并增加间距
+        teammateBtnLayout.addWidget(addTeammateBtn, 0, 0)      # 第1行第1列
+        teammateBtnLayout.addWidget(removeTeammateBtn, 0, 1)   # 第1行第2列
+        teammateBtnLayout.addWidget(loadTeammateBtn, 1, 0)     # 第2行第1列
+        teammateBtnLayout.addWidget(clearAllTeammatesBtn, 1, 1) # 第2行第2列
+        
+        # 队友信息显示
+        teammateInfoLabel = BodyLabel('')
+        teammateInfoLabel.setObjectName("teammateInfoLabel")  # 设置对象名以便更新时查找
+        teammateInfoLabel.setWordWrap(True)  # 允许文字换行
+        teammateInfoLabel.setStyleSheet("color: #666; font-size: 13px;")  # 设置样式，使其显示更清晰
+        teammateInfoLabel.setAlignment(Qt.AlignCenter)  # 居中对齐
+        
+        # 添加到卡片布局
+        teammateLayout.addLayout(teammateBtnLayout)
+        teammateLayout.addWidget(teammateInfoLabel)
+        teammateLayout.addStretch(1)  # 添加弹性空间，将内容推向顶部，使标签居中
+        teammateCardWidget = QWidget()
+        teammateCardWidget.setLayout(teammateLayout)
+        teammateCard.viewLayout.addWidget(teammateCardWidget)
+        
+        # 将两个卡片添加到顶部布局
+        topLayout.addWidget(iconCard, 1) # 设置伸展因子为1
+        topLayout.addWidget(teammateCard, 1) # 设置伸展因子为1
+        
+        # ========== 识别队友区域 ==========
+        recognitionCard = HeaderCardWidget(self.teamRecognitionInterface)
+        recognitionCard.setTitle("识别队友")
+        recognitionLayout = QVBoxLayout()
+        recognitionLayout.setSpacing(18)  # 增加垂直间距
+        recognitionLayout.setContentsMargins(0, 8, 0, 8)  # 增加内边距
+        
+        # 控制面板区域
+        controlsPanel = QFrame()
+        controlsPanel.setObjectName("cardFrame")
+        controlsPanelLayout = QHBoxLayout(controlsPanel)
+        controlsPanelLayout.setSpacing(16)
+        controlsPanelLayout.setContentsMargins(16, 12, 16, 12)  # 增加内边距使内容更加突出
+        
+        # 选择识别位置按钮
+        selectPositionBtn = PrimaryPushButton("选择识别位置")
+        selectPositionBtn.setIcon(FIF.EDIT)
+        selectPositionBtn.setMinimumWidth(160)  # 增加按钮宽度
+        
+        # 识别状态显示
+        statusLabel = BodyLabel("状态: 未开始识别")
+        statusLabel.setStyleSheet("color: #888; font-size: 14px;")  # 调整样式
+        
+        controlsPanelLayout.addWidget(selectPositionBtn)
+        controlsPanelLayout.addWidget(statusLabel)
+        controlsPanelLayout.addStretch(1)
+        
+        # 预览区域
+        previewArea = QFrame()
+        previewArea.setObjectName("cardFrame")
+        # 修改：使用浅色背景和深色文字
+        previewArea.setStyleSheet("#cardFrame{background-color: #f8f9fa; color: #333333; border-radius: 10px; border: 1px solid #e0e0e0;}") 
+        previewLayout = QVBoxLayout(previewArea)
+        previewLayout.setContentsMargins(10, 10, 10, 10)  # 添加内边距
+        
+        previewTitle = QLabel("队友信息预览")
+        previewTitle.setAlignment(Qt.AlignCenter)
+        # 修改：标题文字颜色改为深色
+        previewTitle.setStyleSheet("color: #333333; font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        
+        # 创建滚动区域
+        scrollArea = ScrollArea()
+        scrollArea.setWidgetResizable(True)
+        scrollArea.setStyleSheet("background: transparent; border: none;")
+        
+        scrollContent = QWidget()
+        scrollLayout = QVBoxLayout(scrollContent)
+        scrollLayout.setContentsMargins(0, 0, 0, 0)
+        scrollLayout.setSpacing(8)
+        
+        # 创建队友信息标签
+        self.teammateInfoPreview = QLabel("加载队友信息中...")
+        self.teammateInfoPreview.setWordWrap(True)
+        # 修改：默认文字颜色改为深色
+        self.teammateInfoPreview.setStyleSheet("color: #333333; font-size: 14px;") 
+        scrollLayout.addWidget(self.teammateInfoPreview)
+        
+        scrollArea.setWidget(scrollContent)
+        
+        previewLayout.addWidget(previewTitle)
+        previewLayout.addWidget(scrollArea)
+        
+        # 添加更新按钮
+        updateInfoBtn = PushButton("刷新队友信息")
+        updateInfoBtn.setIcon(FIF.SYNC)
+        updateInfoBtn.clicked.connect(self.update_teammate_preview)
+        previewLayout.addWidget(updateInfoBtn)
+        
+        # 底部控制按钮
+        buttonLayout = QHBoxLayout()
+        buttonLayout.setSpacing(16)
+        
+        startBtn = PrimaryPushButton("开始识别")
+        startBtn.setIcon(FIF.PLAY)
+        startBtn.setMinimumWidth(130)  # 增加按钮宽度
+        
+        stopBtn = PushButton("停止")
+        stopBtn.setIcon(FIF.CANCEL)
+        stopBtn.setMinimumWidth(130)  # 增加按钮宽度
+        
+        saveBtn = PushButton("导出配置")
+        saveBtn.setIcon(FIF.SAVE)
+        saveBtn.setMinimumWidth(130)  # 增加按钮宽度
+        
+        # 连接按钮事件
+        selectPositionBtn.clicked.connect(self.select_recognition_position)
+        startBtn.clicked.connect(self.start_recognition_from_calibration)
+        stopBtn.clicked.connect(self.stop_recognition)
+        saveBtn.clicked.connect(self.export_recognition_config)
+        
+        # 然后继续添加按钮到布局
+        buttonLayout.addStretch(1)
+        buttonLayout.addWidget(startBtn)
+        buttonLayout.addWidget(stopBtn)
+        buttonLayout.addWidget(saveBtn)
+        buttonLayout.addStretch(1)
+        
+        # 添加到识别布局
+        recognitionLayout.addWidget(controlsPanel)
+        recognitionLayout.addWidget(previewArea)
+        recognitionLayout.addLayout(buttonLayout)
+        
+        recognitionCardWidget = QWidget()
+        recognitionCardWidget.setLayout(recognitionLayout)
+        recognitionCard.viewLayout.addWidget(recognitionCardWidget)
+        
+        # 添加到主布局
+        layout.addLayout(topLayout)
+        layout.addWidget(recognitionCard, 1)  # 1表示伸展因子，让这个区域占据更多空间
+        
+    def loadProfessionIcons(self):
+        """加载职业图标并显示管理对话框"""
+        # 使用自定义无边框对话框
+        manage_dialog = ProfessionIconsManageDialog(self)
+        manage_dialog.exec()
+    
+    def deleteProfessionIcon(self, icon_file, frame, dialog=None):
+        """删除职业图标"""
+        profession_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons")
+        icon_path = os.path.join(profession_path, icon_file)
+        
+        # 确认删除
+        confirm_dialog = ConfirmMessageBox(
+            "确认删除",
+            f"确定要删除职业图标 {os.path.splitext(icon_file)[0]} 吗？",
+            self if not dialog else dialog # Keep ConfirmMessageBox parented to dialog for modality
+        )
+        
+        if confirm_dialog.exec():
+            try:
+                # 删除文件
+                os.remove(icon_path)
+                # 从UI中移除
+                frame.setParent(None)
+                frame.deleteLater()
+                # 更新图标计数
+                self.updateIconCount()
+                # 提示成功
+                InfoBar.success(
+                    title='删除成功',
+                    content=f'已删除职业图标 {os.path.splitext(icon_file)[0]}',
+                    orient=Qt.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=2000,
+                    parent=self  # Ensure InfoBar is parented to MainWindow
+                )
+            except Exception as e:
+                # 删除失败提示
+                InfoBar.error(
+                    title='删除失败',
+                    content=str(e),
+                    orient=Qt.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=3000,
+                    parent=self  # Ensure InfoBar is parented to MainWindow
+                )
+
+    def initHealthMonitorInterface(self):
+        """初始化血条监控界面"""
+        layout = QVBoxLayout(self.healthMonitorInterface)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 标题和状态信息
+        titleLayout = QHBoxLayout()
+        titleLabel = StrongBodyLabel("血条实时监控")
+        titleLabel.setStyleSheet("font-size: 18px; font-weight: bold;")
+        
+        self.monitor_status_label = BodyLabel("准备就绪")
+        self.monitor_status_label.setStyleSheet("color: #3498db;")
+        titleLayout.addWidget(titleLabel)
+        titleLayout.addStretch(1)
+        titleLayout.addWidget(self.monitor_status_label)
+        
+        # 控制按钮区域
+        controlLayout = QHBoxLayout()
+        
+        startMonitorBtn = PrimaryPushButton("开始监控")
+        startMonitorBtn.setIcon(FIF.PLAY)
+        startMonitorBtn.setMinimumWidth(120)
+        
+        stopMonitorBtn = PushButton("停止监控")
+        stopMonitorBtn.setIcon(FIF.CLOSE)
+        stopMonitorBtn.setMinimumWidth(120)
+        
+        # 新增：设置血条颜色按钮
+        setColorBtn = PushButton("设置血条颜色")
+        setColorBtn.setIcon(FIF.PALETTE) # 使用 PALETTE 图标替代 COLOR
+        setColorBtn.setMinimumWidth(120)
+        
+        # 新增：统一设置血条颜色按钮
+        setAllColorsBtn = PushButton("统一设置颜色")
+        setAllColorsBtn.setIcon(FIF.BRUSH) # 使用 BRUSH 图标
+        setAllColorsBtn.setMinimumWidth(120)
+        
+        # 连接按钮事件
+        startMonitorBtn.clicked.connect(self.health_monitor.start_monitoring)
+        stopMonitorBtn.clicked.connect(self.health_monitor.stop_monitoring)
+        setColorBtn.clicked.connect(self.setTeammateHealthBarColor)  # 连接到单个设置方法
+        setAllColorsBtn.clicked.connect(self.handleSetAllTeammatesColor) # 连接到统一设置方法
+        
+        controlLayout.addWidget(startMonitorBtn)
+        controlLayout.addWidget(stopMonitorBtn)
+        controlLayout.addWidget(setColorBtn)  # 添加单个设置按钮
+        controlLayout.addWidget(setAllColorsBtn) # 添加统一设置按钮
+        controlLayout.addStretch(1)
+        
+        # 血条展示区域
+        self.health_bars_frame = QFrame()
+        self.health_bars_frame.setObjectName("cardFrame")
+        self.health_bars_frame.setStyleSheet("QFrame#cardFrame { background-color: rgba(240, 240, 240, 0.7); border-radius: 8px; padding: 10px; }")
+        healthBarsLayout = QVBoxLayout(self.health_bars_frame)
+        healthBarsLayout.setSpacing(12)
+        healthBarsLayout.setContentsMargins(15, 15, 15, 15)
+        
+        # 初始化血条UI
+        self.init_health_bars_ui()
+        
+        # 添加到监控布局
+        layout.addLayout(titleLayout)
+        layout.addLayout(controlLayout)
+        layout.addWidget(self.health_bars_frame, 1)  # 将监控卡片设置为可伸展，占用更多空间
+        
+        # 设置卡片
+        settingsCard = HeaderCardWidget(self.healthMonitorInterface)
+        settingsCard.setTitle("血条监控设置")
+        
+        settingsLayout = QVBoxLayout()
+        settingsLayout.setSpacing(12)
+        
+        # 基本设置组
+        paramsGroup = QGroupBox("监控参数", self.healthMonitorInterface)
+        paramsGroupLayout = QVBoxLayout()
+        
+        # 阈值设置
+        thresholdLayout = QHBoxLayout()
+        thresholdLabel = BodyLabel(f"血条阈值: {int(self.health_monitor.health_threshold)}%")
+        thresholdSlider = Slider(Qt.Horizontal)
+        thresholdSlider.setRange(0, 100)
+        thresholdSlider.setValue(int(self.health_monitor.health_threshold))
+        thresholdLayout.addWidget(thresholdLabel)
+        thresholdLayout.addWidget(thresholdSlider)
+        thresholdSlider.valueChanged.connect(lambda v: self.update_health_threshold(v, thresholdLabel))
+        
+        # 采样率设置
+        samplingLayout = QHBoxLayout()
+        samplingLabel = BodyLabel("采样率 (fps):")
+        samplingSpinBox = SpinBox()
+        samplingSpinBox.setRange(1, 60)
+        samplingSpinBox.setValue(10)
+        samplingLayout.addWidget(samplingLabel)
+        samplingLayout.addWidget(samplingSpinBox)
+        
+        # 添加所有参数设置
+        paramsGroupLayout.addLayout(thresholdLayout)
+        paramsGroupLayout.addLayout(samplingLayout)
+        
+        # 自动点击低血量队友功能开关
+        autoClickLayout = QHBoxLayout()
+        autoClickLabel = BodyLabel("自动点击低血量队友:")
+        self.autoClickSwitch = SwitchButton()
+        # 从 HealthMonitor 加载初始状态
+        if hasattr(self, 'health_monitor') and hasattr(self.health_monitor, 'auto_select_enabled'):
+            self.autoClickSwitch.setChecked(self.health_monitor.auto_select_enabled)
+        else:
+            self.autoClickSwitch.setChecked(False) # 默认关闭
+        
+        # 新增：职业优先级下拉框
+        priorityLabel = BodyLabel("优先职业:")
+        self.priorityComboBox = ComboBox()
+        self.priorityComboBox.setFixedWidth(120)
+        # 加载所有职业选项
+        self.load_profession_options()
+        # 设置当前选中值
+        if hasattr(self, 'health_monitor') and hasattr(self.health_monitor, 'priority_profession'):
+            priority_index = self.priorityComboBox.findText(self.health_monitor.priority_profession)
+            if priority_index >= 0:
+                self.priorityComboBox.setCurrentIndex(priority_index)
+        
+        # 连接信号
+        self.autoClickSwitch.checkedChanged.connect(self.toggle_auto_click_low_health)
+        self.priorityComboBox.currentTextChanged.connect(self.update_priority_profession)
+        
+        autoClickLayout.addWidget(autoClickLabel)
+        autoClickLayout.addWidget(self.autoClickSwitch)
+        autoClickLayout.addSpacing(20)  # 增加间距
+        autoClickLayout.addWidget(priorityLabel)
+        autoClickLayout.addWidget(self.priorityComboBox)
+        autoClickLayout.addStretch(1)
+        paramsGroupLayout.addLayout(autoClickLayout) # 添加到参数组布局
+        
+        paramsGroup.setLayout(paramsGroupLayout)
+        
+        # 添加到主设置布局
+        settingsLayout.addWidget(paramsGroup)
+        settingsCardWidget = QWidget()
+        settingsCardWidget.setLayout(settingsLayout)
+        settingsCard.viewLayout.addWidget(settingsCardWidget)
+        
+        # 添加卡片到主布局，但设置较小的高度比例
+        layout.addWidget(settingsCard)
+        
+        # 更新采样率设置
+        samplingSpinBox.valueChanged.connect(self.update_sampling_rate)
+    
+    def init_health_bars_ui(self):
+        """初始化血条UI显示"""
+        if not self.health_bars_frame:
+            return
+
+        # 清除现有布局中的所有组件
+        current_layout = self.health_bars_frame.layout()
+        if current_layout is not None:
+            while current_layout.count():
+                item = current_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+        else:
+            # 如果布局不存在，则创建一个新的
+            new_layout = QVBoxLayout(self.health_bars_frame)
+            new_layout.setSpacing(12)
+            new_layout.setContentsMargins(15, 15, 15, 15)
+            self.health_bars_frame.setLayout(new_layout) # 设置新布局
+        
+        # --- 新增：按血条 y1, x1 坐标对队员进行排序 ---
+        sorted_members = sorted(self.team.members, key=lambda m: (m.y1, m.x1))
+        
+        # 添加队友信息卡片
+        for i, member in enumerate(sorted_members): # 使用排序后的列表
+            self.add_health_bar_card(i, member.name, member.profession)
+            
+        # 如果没有队友，显示提示信息
+        if not self.team.members and self.health_bars_frame.layout() is not None: # 检查原始列表判断是否有队友
+            noMemberLabel = StrongBodyLabel("没有队友信息。请在队员识别页面添加队友。")
+            noMemberLabel.setAlignment(Qt.AlignCenter)
+            self.health_bars_frame.layout().addWidget(noMemberLabel)
+        
+        # 添加：强制更新框架，确保UI刷新
+        self.health_bars_frame.update()
+    
+    def add_health_bar_card(self, index, name, profession):
+        """添加血条卡片
+        
+        参数:
+            index: 队友索引
+            name: 队友名称
+            profession: 队友职业
+        """
+        # 创建水平布局，每一行一个队员
+        memberCard = QFrame()
+        memberCard.setObjectName(f"member_card_{index}")
+        memberCard.setFixedHeight(60)  # 设置固定高度
+        memberCard.setStyleSheet("background-color: transparent;")
+        memberLayout = QHBoxLayout(memberCard)
+        memberLayout.setContentsMargins(5, 0, 5, 0)
+        memberLayout.setSpacing(10)
+        
+        # 队员编号和名称 - 使用实际名称
+        nameLabel = StrongBodyLabel(name)
+        nameLabel.setObjectName(f"name_label_{index}")
+        nameLabel.setStyleSheet("font-size: 14px; font-weight: bold;")
+        nameLabel.setFixedWidth(80)
+        
+        # 修改：直接显示识别到的职业名称
+        roleLabel = BodyLabel(str(profession)) # 确保是字符串
+        roleLabel.setStyleSheet("color: #666; font-size: 12px;")
+        roleLabel.setFixedWidth(60)
+        roleLabel.setToolTip(str(profession)) # 添加悬浮提示显示完整职业名
+        
+        # 血条容器
+        healthBarContainer = QFrame()
+        healthBarContainer.setFixedHeight(25)
+        healthBarContainer.setStyleSheet("background-color: #333; border-radius: 5px;")
+        # --- 添加：设置最大宽度 --- 
+        MAX_WIDTH = 300  # 与 update_health_display 中保持一致
+        healthBarContainer.setMaximumWidth(MAX_WIDTH) 
+        # --- 结束添加 ---
+        healthBarContainerLayout = QHBoxLayout(healthBarContainer)
+        healthBarContainerLayout.setContentsMargins(2, 2, 2, 2)
+        healthBarContainerLayout.setSpacing(0)
+        
+        # 血条
+        healthBar = QFrame()
+        healthBar.setObjectName(f"health_bar_{index}")
+        healthBar.setFixedHeight(21)
+        
+        # 根据索引设置不同颜色
+        color = "#2ecc71"  # 绿色 (默认，表示90%)
+        if index == 1:
+            color = "#2ecc71"  # 绿色 (70%)
+        elif index == 2:
+            color = "#f39c12"  # 黄色 (50%)
+        elif index == 3:
+            color = "#e74c3c"  # 红色 (30%)
+        elif index == 4:
+            color = "#e74c3c"  # 红色 (10%)
+        
+        # 设置默认百分比
+        default_percentage = 90
+        if index == 1:
+            default_percentage = 70
+        elif index == 2:
+            default_percentage = 50
+        elif index == 3:
+            default_percentage = 30
+        elif index == 4:
+            default_percentage = 10
+        
+        # 设置血条缩放因子和最大宽度
+        SCALE_FACTOR = 3
+        MAX_WIDTH = 300  # 血条最大宽度
+        
+        # 计算血条宽度
+        bar_width = min(int(default_percentage * SCALE_FACTOR), MAX_WIDTH)
+        print(f"队员{index+1} 初始血条宽度: {bar_width}px (血量: {default_percentage}%)")
+        
+        healthBar.setStyleSheet(f"background-color: {color}; border-radius: 3px;")
+        healthBar.setFixedWidth(bar_width)  # 使用计算的宽度
+        
+        healthBarContainerLayout.addWidget(healthBar)
+        healthBarContainerLayout.addStretch(1)
+        
+        # 血量百分比
+        valueLabel = StrongBodyLabel(f"{default_percentage}%")
+        valueLabel.setObjectName(f"value_label_{index}")
+        valueLabel.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 15px;")
+        valueLabel.setAlignment(Qt.AlignCenter)
+        valueLabel.setFixedWidth(60)
+        
+        # 添加调试标签 - 开发期间使用，显示实际内部存储的血量
+        debugLabel = QLabel(f"dbg:ok")
+        debugLabel.setObjectName(f"debug_label_{index}")
+        debugLabel.setStyleSheet("color: #999; font-size: 8px;")
+        debugLabel.setFixedWidth(50)
+        
+        # 添加到卡片布局
+        memberLayout.addWidget(nameLabel)
+        memberLayout.addWidget(roleLabel)
+        memberLayout.addWidget(healthBarContainer)
+        memberLayout.addWidget(valueLabel)
+        memberLayout.addWidget(debugLabel)  # 添加调试标签
+        
+        # 添加到主布局
+        self.health_bars_frame.layout().addWidget(memberCard)
+        
+        # 添加分隔线（除了最后一个）
+        if index < len(self.team.members) - 1:
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setFrameShadow(QFrame.Sunken)
+            separator.setStyleSheet("background-color: #e0e0e0;")
+            separator.setFixedHeight(1)
+            self.health_bars_frame.layout().addWidget(separator)
+    
+    def update_sampling_rate(self, value):
+        """更新监控采样率
+        
+        参数:
+            value: 采样率值（fps）
+        """
+        if hasattr(self, 'health_monitor'):
+            # 转换为更新间隔（秒）
+            interval = 1.0 / value if value > 0 else 0.1
+            self.health_monitor.update_interval = interval
+            self.update_monitor_status(f"采样率已更新: {value} fps (更新间隔: {interval:.2f}秒)")
+    
+    def show_hotkey_settings(self):
+        """显示快捷键设置对话框"""
+        dialog = HotkeySettingsMessageBox(self.health_monitor, self)
+        dialog.exec()
+    
+    def show_error_message(self, message):
+        """显示错误消息
+        
+        参数:
+            message: 错误消息
+        """
+        InfoBar.error(
+            title='错误',
+            content=message,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+            parent=self
+        )
+    
+    def set_auto_select(self, enabled):
+        """设置自动选择功能
+        
+        参数:
+            enabled: 是否启用
+        """
+        if hasattr(self, 'health_monitor'):
+            self.health_monitor.auto_select_enabled = enabled
+            self.health_monitor.save_auto_select_config()
+            status = "启用" if enabled else "禁用"
+            self.update_monitor_status(f"自动选择功能已{status}")
+
+    def initAssistInterface(self):
+        """初始化辅助功能界面"""
+        layout = QVBoxLayout(self.assistInterface)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 左右布局，左侧为主要功能，右侧为次要功能
+        mainLayout = QHBoxLayout()
+        mainLayout.setSpacing(16)
+        
+        # 左侧布局 - 现在只包含快捷键设置
+        leftLayout = QVBoxLayout()
+        leftLayout.setSpacing(16)
+        
+        # 快捷键卡片
+        hotkeyCard = HeaderCardWidget(self.assistInterface)
+        hotkeyCard.setTitle("快捷键设置")
+        
+        hotkeyLayout = QVBoxLayout()
+        hotkeyLayout.setSpacing(12)
+        
+        # 提示信息
+        hotkey_info = BodyLabel("设置全局快捷键用于快速操作。点击\"记录\"按钮后，按下想要设置的键。")
+        hotkey_info.setWordWrap(True)
+        
+        # 快捷键表格
+        hotkeyGridLayout = QGridLayout()
+        hotkeyGridLayout.setSpacing(12)
+        
+        # 开始监控
+        startMonitorLabel = BodyLabel('开始监控:')
+        startMonitorEdit = LineEdit()
+        startMonitorEdit.setReadOnly(True)
+        startMonitorEdit.setText(self.health_monitor.start_monitoring_hotkey)
+        startMonitorRecordBtn = PushButton('记录')
+        
+        # 停止监控
+        stopMonitorLabel = BodyLabel('停止监控:')
+        stopMonitorEdit = LineEdit()
+        stopMonitorEdit.setReadOnly(True)
+        stopMonitorEdit.setText(self.health_monitor.stop_monitoring_hotkey)
+        stopMonitorRecordBtn = PushButton('记录')
+        
+        # 绑定"记录"按钮事件，使用事件过滤器方式
+        startMonitorRecordBtn.clicked.connect(lambda: self.install_hotkey_event_filter(startMonitorEdit, stopMonitorEdit, 'start'))
+        stopMonitorRecordBtn.clicked.connect(lambda: self.install_hotkey_event_filter(stopMonitorEdit, startMonitorEdit, 'stop'))
+        
+        # 添加到网格
+        hotkeyGridLayout.addWidget(startMonitorLabel, 0, 0)
+        hotkeyGridLayout.addWidget(startMonitorEdit, 0, 1)
+        hotkeyGridLayout.addWidget(startMonitorRecordBtn, 0, 2)
+        
+        hotkeyGridLayout.addWidget(stopMonitorLabel, 1, 0)
+        hotkeyGridLayout.addWidget(stopMonitorEdit, 1, 1)
+        hotkeyGridLayout.addWidget(stopMonitorRecordBtn, 1, 2)
+        
+        # 添加所有组件到快捷键卡片
+        hotkeyLayout.addWidget(hotkey_info)
+        hotkeyLayout.addLayout(hotkeyGridLayout)
+        # 增加状态信息标签
+        self.hotkeyStatusLabel = BodyLabel('')
+        hotkeyLayout.addWidget(self.hotkeyStatusLabel)
+        hotkeyCardWidget = QWidget()
+        hotkeyCardWidget.setLayout(hotkeyLayout)
+        hotkeyCard.viewLayout.addWidget(hotkeyCardWidget)
+        
+        # 添加快捷键卡片到左侧布局
+        leftLayout.addWidget(hotkeyCard)
+        leftLayout.addStretch(1)
+        
+        # 右侧布局 - 保持不变
+        rightLayout = QVBoxLayout()
+        rightLayout.setSpacing(16)
+        
+        # 数据导出卡片
+        exportCard = HeaderCardWidget(self.assistInterface)
+        exportCard.setTitle("数据导出")
+        
+        exportLayout = QVBoxLayout()
+        exportLayout.setSpacing(12)
+        
+        # 导出按钮
+        exportBtnsLayout = QHBoxLayout()
+        
+        exportCsvBtn = PushButton("导出CSV")
+        exportCsvBtn.setIcon(FIF.DOWNLOAD)
+        
+        exportJsonBtn = PushButton("导出JSON")
+        exportJsonBtn.setIcon(FIF.DOWNLOAD)
+        
+        exportBtnsLayout.addWidget(exportCsvBtn)
+        exportBtnsLayout.addWidget(exportJsonBtn)
+        exportBtnsLayout.addStretch(1)
+        
+        # 自动导出开关
+        autoExportLayout = QHBoxLayout()
+        autoExportLabel = BodyLabel("自动导出:")
+        autoExportSwitch = SwitchButton()
+        
+        autoExportLayout.addWidget(autoExportLabel)
+        autoExportLayout.addWidget(autoExportSwitch)
+        autoExportLayout.addStretch(1)
+        
+        # 导出路径
+        exportPathLayout = QHBoxLayout()
+        exportPathLabel = BodyLabel("导出路径:")
+        exportPathEdit = LineEdit()
+        exportPathEdit.setText(os.path.join(os.path.expanduser("~"), "Documents"))
+        exportPathBtn = PushButton("浏览")
+        exportPathBtn.setIcon(FIF.FOLDER)
+        
+        exportPathLayout.addWidget(exportPathLabel)
+        exportPathLayout.addWidget(exportPathEdit)
+        exportPathLayout.addWidget(exportPathBtn)
+        
+        # 添加所有组件到导出卡片
+        exportLayout.addLayout(exportBtnsLayout)
+        exportLayout.addLayout(autoExportLayout)
+        exportLayout.addLayout(exportPathLayout)
+        exportCardWidget = QWidget()
+        exportCardWidget.setLayout(exportLayout)
+        exportCard.viewLayout.addWidget(exportCardWidget)
+        
+        # 添加导出卡片到右侧布局
+        rightLayout.addWidget(exportCard)
+        rightLayout.addStretch(1)
+        
+        # 添加左右布局到主布局
+        mainLayout.addLayout(leftLayout, 2)
+        mainLayout.addLayout(rightLayout, 1)
+        
+        # 添加主布局到辅助功能界面
+        layout.addLayout(mainLayout)
+
+    def initSettingsInterface(self):
+        """初始化设置界面"""
+        layout = QVBoxLayout(self.settingsInterface)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 基本设置卡片
+        basicCard = HeaderCardWidget(self.settingsInterface)
+        basicCard.setTitle("基本设置")
+        
+        basicLayout = QVBoxLayout()
+        basicLayout.setSpacing(16)
+        
+        # 主题设置
+        themeLayout = QHBoxLayout()
+        themeLabel = BodyLabel("主题:")
+        themeCombo = ComboBox()
+        themeCombo.addItems(["跟随系统", "亮色模式", "暗色模式"])
+        themeLayout.addWidget(themeLabel)
+        themeLayout.addWidget(themeCombo)
+        themeLayout.addStretch(1)
+        
+        # 语言设置
+        languageLayout = QHBoxLayout()
+        languageLabel = BodyLabel("语言:")
+        languageCombo = ComboBox()
+        languageCombo.addItems(["简体中文", "English"])
+        languageLayout.addWidget(languageLabel)
+        languageLayout.addWidget(languageCombo)
+        languageLayout.addStretch(1)
+        
+        # 自动启动
+        autoStartLayout = QHBoxLayout()
+        autoStartLabel = BodyLabel("开机自动启动:")
+        autoStartSwitch = SwitchButton()
+        autoStartLayout.addWidget(autoStartLabel)
+        autoStartLayout.addWidget(autoStartSwitch)
+        autoStartLayout.addStretch(1)
+        
+        # 添加所有组件到基本设置卡片
+        basicLayout.addLayout(themeLayout)
+        basicLayout.addLayout(languageLayout)
+        basicLayout.addLayout(autoStartLayout)
+        basicCardWidget = QWidget()
+        basicCardWidget.setLayout(basicLayout)
+        basicCard.viewLayout.addWidget(basicCardWidget)
+        
+        # 高级设置卡片
+        advancedCard = HeaderCardWidget(self.settingsInterface)
+        advancedCard.setTitle("高级设置")
+        
+        advancedLayout = QVBoxLayout()
+        advancedLayout.setSpacing(16)
+        
+        # 缓存设置
+        cacheLayout = QHBoxLayout()
+        cacheLabel = BodyLabel("缓存大小:")
+        cacheSizeLabel = BodyLabel("23.5 MB")
+        clearCacheBtn = PushButton("清除缓存")
+        clearCacheBtn.setIcon(FIF.DELETE)
+        
+        cacheLayout.addWidget(cacheLabel)
+        cacheLayout.addWidget(cacheSizeLabel)
+        cacheLayout.addStretch(1)
+        cacheLayout.addWidget(clearCacheBtn)
+        
+        # AI模型设置
+        modelLayout = QHBoxLayout()
+        modelLabel = BodyLabel("AI模型:")
+        modelCombo = ComboBox()
+        modelCombo.addItems(['标准模型', '轻量级模型', '高精度模型', '自娱自乐模型', '作者没钱加模型'])
+        modelLayout.addWidget(modelLabel)
+        modelLayout.addWidget(modelCombo)
+        modelLayout.addStretch(1)
+        
+        # GPU加速
+        gpuLayout = QHBoxLayout()
+        gpuLabel = BodyLabel("GPU加速:")
+        gpuSwitch = SwitchButton()
+        gpuSwitch.setChecked(True)
+        gpuLayout.addWidget(gpuLabel)
+        gpuLayout.addWidget(gpuSwitch)
+        gpuLayout.addStretch(1)
+        
+        # 添加所有组件到高级设置卡片
+        advancedLayout.addLayout(cacheLayout)
+        advancedLayout.addLayout(modelLayout)
+        advancedLayout.addLayout(gpuLayout)
+        advancedCardWidget = QWidget()
+        advancedCardWidget.setLayout(advancedLayout)
+        advancedCard.viewLayout.addWidget(advancedCardWidget)
+        
+        # 关于卡片
+        aboutCard = HeaderCardWidget(self.settingsInterface)
+        aboutCard.setTitle("关于")
+        
+        aboutLayout = QVBoxLayout()
+        aboutLayout.setSpacing(16)
+        
+        # 版本信息
+        versionLayout = QHBoxLayout()
+        versionLabel = BodyLabel("版本:")
+        versionValueLabel = BodyLabel("VitalSync 2.0.0")
+        versionLayout.addWidget(versionLabel)
+        versionLayout.addWidget(versionValueLabel)
+        versionLayout.addStretch(1)
+        
+        # 关于信息
+        aboutInfoLabel = BodyLabel("VitalSync 是一款专为游戏设计的队员血条识别与监控软件，支持多种游戏和场景。")
+        aboutInfoLabel.setWordWrap(True)
+        
+        # 控制按钮
+        controlLayout = QHBoxLayout()
+        updateBtn = PushButton("检查更新")
+        updateBtn.setIcon(FIF.UPDATE)
+        
+        githubBtn = PushButton("GitHub项目")
+        githubBtn.setIcon(FIF.LINK)
+        # 连接点击事件
+        githubBtn.clicked.connect(self.openGitHubProject)
+        
+        controlLayout.addWidget(updateBtn)
+        controlLayout.addWidget(githubBtn)
+        controlLayout.addStretch(1)
+        
+        # 添加所有组件到关于卡片
+        aboutLayout.addLayout(versionLayout)
+        aboutLayout.addWidget(aboutInfoLabel)
+        aboutLayout.addLayout(controlLayout)
+        aboutCardWidget = QWidget()
+        aboutCardWidget.setLayout(aboutLayout)
+        aboutCard.viewLayout.addWidget(aboutCardWidget)
+        
+        # 添加所有卡片到设置界面
+        layout.addWidget(basicCard)
+        layout.addWidget(advancedCard)
+        layout.addWidget(aboutCard)
+        layout.addStretch(1)
+
+    def openGitHubProject(self):
+        """打开GitHub项目页面"""
+        url = QUrl("https://github.com/yinduandafeimao/VitalSync-Pulse")
+        QDesktopServices.openUrl(url)
+        
+        # 显示提示信息
+        InfoBar.success(
+            title='已打开链接',
+            content='已在浏览器中打开GitHub项目页面',
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=2000,
+            parent=self
+        )
+
+    def addProfessionIcon(self):
+        """添加新的职业图标"""
+        # 检查profession_icons文件夹是否存在
+        profession_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons")
+        if not os.path.exists(profession_path):
+            os.makedirs(profession_path)  # 创建文件夹如果不存在
+            
+        # 打开文件选择对话框
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择职业图标",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg)"
+        )
+        
+        if not file_path:
+            return
+        
+        # 获取文件名
+        file_name_without_ext = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # 使用自定义无边框对话框获取职业名称
+        input_dialog = TextInputMessageBox(
+            title='输入职业名称',
+            label_text='请输入该职业图标的名称:',
+            default_text=file_name_without_ext,
+            placeholder_text='例如：奶妈、坦克、输出',
+            parent=self
+        )
+        
+        if not input_dialog.exec():
+            return
+        
+        icon_name = input_dialog.get_text()
+        if not icon_name:
+            InfoBar.warning(
+                title='输入无效',
+                content='职业名称不能为空。',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self
+            )
+            return
+        
+        # 构造目标路径
+        target_path = os.path.join(profession_path, icon_name + os.path.splitext(file_path)[1])
+        
+        # 检查是否已存在同名文件
+        if os.path.exists(target_path):
+            confirm_dialog = ConfirmMessageBox(
+                "文件已存在",
+                f"职业 '{icon_name}' 已存在，是否覆盖?",
+                self
+            )
+            
+            if not confirm_dialog.exec():
+                return
+        
+        try:
+            # 复制文件
+            import shutil
+            shutil.copy2(file_path, target_path)
+            
+            # 显示成功消息
+            InfoBar.success(
+                title='添加成功',
+                content=f'职业图标 {icon_name} 已添加',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self
+            )
+            
+            # 更新图标数量显示
+            self.updateIconCount()
+        except Exception as e:
+            # 显示错误消息
+            InfoBar.error(
+                title='添加失败',
+                content=str(e),
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self
+            )
+    
+    def updateIconCount(self):
+        """更新职业图标数量显示"""
+        # 重新计算图标数量
+        profession_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profession_icons")
+        icon_count = len([f for f in os.listdir(profession_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
+        
+        # 查找信息标签并更新
+        for i in range(self.iconCardWidget.layout().count()):
+            item = self.iconCardWidget.layout().itemAt(i)
+            if item.widget() and isinstance(item.widget(), BodyLabel) and "当前已加载" in item.widget().text():
+                item.widget().setText(f'当前已加载 {icon_count} 个职业图标')
+                break
+
+    def init_recognition(self):
+        """初始化识别模块"""
+        try:
+            if self.recognition is None:
+                from teammate_recognition import TeammateRecognition
+                self.recognition = TeammateRecognition()
+                InfoBar.success(
+                    title='OCR模型加载成功',
+                    content='队友识别功能已准备就绪',
+                    orient=Qt.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=2000,
+                    parent=self
+                )
+            return True
+        except Exception as e:
+            InfoBar.error(
+                title='OCR初始化失败',
+                content=f'错误: {str(e)}',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self
+            )
+            return False
+
+    def addTeammate(self):
+        """添加队友"""
+        print("\n添加新队友:")
+        
+        # 使用自定义的MessageBoxBase子类
+        dialog = AddTeammateMessageBox(self)
+        
+        if dialog.exec():
+            name, profession = dialog.get_teammate_info()
+            
+            # 使用Team类添加队友
+            new_member = self.team.add_member(name, profession)
+            
+            # 使用全局默认颜色设置(如果有的话)
+            if self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
+                import numpy as np
+                new_member.hp_color_lower = np.copy(self.default_hp_color_lower)
+                new_member.hp_color_upper = np.copy(self.default_hp_color_upper)
+                new_member.save_config()  # 保存颜色设置到队员配置文件
+            
+            # 更新健康监控
+            self.health_monitor.team = self.team
+            self.init_health_bars_ui()
+            
+            # 提示设置血条位置 - 使用自定义确认对话框
+            confirm_dialog = ConfirmMessageBox(
+                "设置血条位置",
+                f"是否立即为 {name} 设置血条位置？",
+                self
+            )
+            
+            if confirm_dialog.exec():
+                # 使用选择框设置血条位置
+                self.set_health_bar_position(new_member)
+            
+            InfoBar.success(
+                title='添加成功',
+                content=f'队友 {name} ({profession}) 已添加',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
                 duration=2000,
                 parent=self
             )
@@ -2166,20 +3705,35 @@ class MainWindow(FluentWindow):
     def start_recognition_from_calibration(self):
         """从校准文件加载血条位置信息开始识别"""
         try:
+            # 先检查校准文件是否正常
+            if not self.check_calibration_file():
+                self.show_safe_infobar(
+                    '校准文件错误',
+                    '校准文件不存在或内容无效，请先创建校准文件',
+                    'error',
+                    3000
+                )
+                return
+                
             # 导入校准工具
             from health_bar_calibration import HealthBarCalibration
             calibration = HealthBarCalibration()
             print("\n=== 开始血条识别流程 ===")
             print(f"校准对象创建完成，可用校准集: {calibration.get_calibration_set_names()}")
             
+            # 如果没有可用的校准集，提示用户
+            if not calibration.get_calibration_set_names():
+                self.show_safe_infobar(
+                    '无可用校准数据集',
+                    '请先通过"选择识别位置"创建校准数据',
+                    'warning',
+                    3000
+                )
+                return
+                
             # 创建自定义选择对话框
             try:
-                print("正在创建 CalibrationSelectionMessageBox 对话框...")
                 calibration_dialog = CalibrationSelectionMessageBox(calibration, self)
-                print("对话框创建成功，检查属性:")
-                print(f"- selection_detail_label 属性: {hasattr(calibration_dialog, 'selection_detail_label')}")
-                print(f"- warningLabel 属性: {hasattr(calibration_dialog, 'warningLabel')}")
-                print(f"- list_widget 属性: {hasattr(calibration_dialog, 'list_widget')}")
             except Exception as dialog_err:
                 print(f"创建对话框时出错: {dialog_err}")
                 import traceback
@@ -2194,11 +3748,8 @@ class MainWindow(FluentWindow):
                 
             # 显示对话框
             try:
-                print("正在显示对话框...")
                 result = calibration_dialog.exec()
-                print(f"对话框结果: {result}")
                 if not result:
-                    print("用户取消了对话框")
                     return
             except Exception as exec_err:
                 print(f"显示对话框时出错: {exec_err}")
@@ -2214,18 +3765,13 @@ class MainWindow(FluentWindow):
             
             # 获取选择的校准数据集
             if not calibration_dialog.selected_calibration:
-                print("未选择校准数据集")
                 return
                 
-            print(f"选择的校准数据集: {calibration_dialog.selected_calibration}")
-            print(f"校准对象的当前状态: current_set_name={calibration.current_set_name}, health_bars数量={len(calibration.health_bars) if calibration.health_bars else 0}")
-            
             # 将全局默认血条颜色传递给校准工具（如果有的话）
             if hasattr(self, 'default_hp_color_lower') and hasattr(self, 'default_hp_color_upper') and \
                self.default_hp_color_lower is not None and self.default_hp_color_upper is not None:
                 calibration.default_hp_color_lower = self.default_hp_color_lower
                 calibration.default_hp_color_upper = self.default_hp_color_upper
-                print("已设置默认血条颜色")
             
             # 显示识别进度提示
             self.show_safe_infobar(
@@ -2235,23 +3781,23 @@ class MainWindow(FluentWindow):
                 1500
             )
             
-            # 更新预览区显示识别状态
-            self.teammateInfoPreview.setText(f"<html><body style='color: white;'>"
-                                           f"<div style='font-weight: bold; font-size: 16px;'>正在识别队友...</div>"
-                                           f"<div>使用校准集: {calibration_dialog.selected_calibration}</div>"
-                                           f"<div>请稍候...</div>"
-                                           f"</body></html>")
-            QApplication.processEvents()  # 立即更新UI
+            # 检查teammateInfoPreview是否存在
+            if hasattr(self, 'teammateInfoPreview'):
+                # 更新预览区显示识别状态
+                self.teammateInfoPreview.setText(f"<html><body style='color: #333333;'>"
+                                               f"<div style='font-weight: bold; font-size: 16px;'>正在识别队友...</div>"
+                                               f"<div>使用校准集: {calibration_dialog.selected_calibration}</div>"
+                                               f"<div>请稍候...</div>"
+                                               f"</body></html>")
+                QApplication.processEvents()  # 立即更新UI
             
             # 进行队友识别
             self.recognition_in_progress = True
-            print(f"创建识别线程，校准集名称: {calibration_dialog.selected_calibration}")
             self.recognition_thread = RecognitionThread(calibration, calibration_dialog.selected_calibration)
             self.recognition_thread.progress_signal.connect(self.update_recognition_progress)
             self.recognition_thread.result_signal.connect(self.update_recognition_results)
             self.recognition_thread.finished.connect(self.recognition_finished)
             self.recognition_thread.start()
-            print("识别线程已启动")
         
         except Exception as e:
             # 处理识别过程中的异常
@@ -2262,8 +3808,7 @@ class MainWindow(FluentWindow):
                 '识别错误',
                 f'识别过程中出错: {str(e)}',
                 'error',
-                3000,
-                self
+                3000
             )
     
     def update_recognition_progress(self, progress_info):
@@ -3832,21 +5377,109 @@ class MainWindow(FluentWindow):
             position: 显示位置
         """
         try:
+            # 检查父对象是否有效
             if parent is None:
                 parent = self
                 
-            if type_ == 'info':
-                InfoBar.info(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
-            elif type_ == 'success':
-                InfoBar.success(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
-            elif type_ == 'warning':
-                InfoBar.warning(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
-            elif type_ == 'error':
-                InfoBar.error(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
+            # 确保父对象仍然有效（未被销毁）
+            if not parent or not hasattr(parent, 'isVisible') or not parent.isVisible():
+                print(f"警告: 无法显示InfoBar - 父对象无效或不可见")
+                return
+                
+            # 使用QTimer延迟执行，避免直接调用可能导致的问题
+            def show_infobar():
+                try:
+                    if not parent or not hasattr(parent, 'isVisible') or not parent.isVisible():
+                        return
+                        
+                    if type_ == 'info':
+                        InfoBar.info(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
+                    elif type_ == 'success':
+                        InfoBar.success(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
+                    elif type_ == 'warning':
+                        InfoBar.warning(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
+                    elif type_ == 'error':
+                        InfoBar.error(title, content, orient=Qt.Horizontal, isClosable=True, position=position, duration=duration, parent=parent)
+                except RuntimeError as e:
+                    if "has been deleted" in str(e):
+                        print(f"InfoBar 显示错误: 对象已被删除")
+                    else:
+                        print(f"InfoBar 运行时错误: {e}")
+                except Exception as e:
+                    print(f"InfoBar 未知错误: {e}")
+            
+            # 使用单次触发的定时器延迟显示
+            QTimer.singleShot(10, show_infobar)
+            
         except RuntimeError as e:
-            print(f"InfoBar 显示错误: {e}")
+            if "has been deleted" in str(e):
+                print(f"InfoBar 显示错误: 对象已被删除")
+            else:
+                print(f"InfoBar 运行时错误: {e}")
         except Exception as e:
             print(f"InfoBar 未知错误: {e}")
+
+    def check_calibration_file(self):
+        """检查校准文件是否有效，必要时尝试修复"""
+        import os
+        import json
+        
+        calibration_file = "health_bars_calibration.json"
+        
+        # 检查文件是否存在
+        if not os.path.exists(calibration_file):
+            print(f"校准文件 {calibration_file} 不存在")
+            return False
+        
+        # 尝试加载文件检查是否有效
+        try:
+            with open(calibration_file, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                    # 检查基本结构
+                    if not isinstance(data, dict):
+                        print(f"校准文件不是有效的JSON对象: {type(data)}")
+                        return False
+                    
+                    # 检查是否包含校准集
+                    if 'calibration_sets' not in data or not isinstance(data['calibration_sets'], dict):
+                        print(f"校准文件中没有有效的calibration_sets数据")
+                        return False
+                        
+                    # 检查是否有至少一个校准集
+                    if len(data['calibration_sets']) == 0:
+                        print(f"校准文件中没有任何校准集")
+                        return False
+                    
+                    # 文件有效
+                    return True
+                    
+                except json.JSONDecodeError as e:
+                    print(f"校准文件JSON解析失败: {e}")
+                    
+                    # 尝试修复文件
+                    try:
+                        # 读取原始内容
+                        f.seek(0)
+                        content = f.read()
+                        
+                        # 尝试简单替换常见的无效JSON字符
+                        content = content.replace('\n', ' ').replace('\r', '')
+                        data = json.loads(content)
+                        
+                        # 如果成功解析，则写回文件
+                        with open(calibration_file, 'w', encoding='utf-8') as out_f:
+                            json.dump(data, out_f, indent=4, ensure_ascii=False)
+                        
+                        print("校准文件已尝试修复")
+                        return True
+                    except Exception as fix_err:
+                        print(f"尝试修复校准文件失败: {fix_err}")
+                        return False
+                        
+        except Exception as e:
+            print(f"读取校准文件时出错: {e}")
+            return False
 
 class RecognitionThread(QThread):
     """队友识别线程类"""
@@ -3932,25 +5565,21 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
     
     def __init__(self, calibration, parent=None):
         """初始化校准集选择对话框"""
-        print("初始化 CalibrationSelectionMessageBox...")
         super().__init__(parent)
         self.calibration = calibration
         self.selected_calibration = None
         
-        # 保存需要安全检查的属性列表
-        self._critical_attrs = ['detail_label', 'warning_label', 'delete_button', 'list_widget']
-        
-        print("设置基本 UI 元素...")
-        # 确保先设置标题标签
+        # 设置标题标签
         self.titleLabel = SubtitleLabel('选择校准数据集', self)
         
         # 1. 创建列表控件
         try:
             self.list_widget = QListWidget(self)
+            self.list_widget.setObjectName("calibration_list_widget")
             self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
             self.list_widget.setFixedHeight(200)
             
-            # 2. 设置列表基本样式
+            # 设置列表基本样式
             self.list_widget.setStyleSheet("""
                 QListWidget {
                     border: 1px solid #e0e0e0;
@@ -3969,16 +5598,13 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
             """)
         except Exception as e:
             print(f"创建列表控件时出错: {e}")
-            # 初始化一个空列表控件作为备选
             self.list_widget = QListWidget(self)
         
         # 3. 创建详细信息标签和警告标签
         try:
-            print("创建详细信息标签...")
             self.detail_label = BodyLabel("选择一个校准集以查看详细信息")
             self.detail_label.setWordWrap(True)
             
-            print("创建警告标签...")
             self.warning_label = CaptionLabel("请选择一个校准数据集")
             self.warning_label.setTextColor("#cf1010", QColor(255, 28, 32))
             self.warning_label.hide()  # 默认隐藏
@@ -3989,75 +5615,156 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
                 self.detail_label = BodyLabel("选择一个校准集以查看详细信息", self)
             if not hasattr(self, 'warning_label'):
                 self.warning_label = CaptionLabel("请选择一个校准数据集", self)
-            import traceback
-            traceback.print_exc()
         
         # 创建删除按钮
         try:
-            print("创建删除按钮...")
             self.delete_button = PushButton("删除选中的校准集")
-            self.delete_button.setIcon(FIF.DELETE.icon())  # 使用icon()方法获取QIcon
+            self.delete_button.setIcon(FIF.DELETE.icon())
             self.delete_button.setEnabled(False)  # 初始禁用，直到选中项目
             self.delete_button.clicked.connect(self.delete_selected_calibration)
         except Exception as btn_err:
             print(f"创建删除按钮时出错: {btn_err}")
-            # 确保属性存在
             self.delete_button = PushButton("删除选中的校准集", self)
             self.delete_button.setEnabled(False)
-            import traceback
-            traceback.print_exc()
         
         # 4. 添加组件到视图布局
-        print("添加到视图布局...")
         try:
             self.viewLayout.addWidget(self.titleLabel)
             self.viewLayout.addWidget(self.list_widget)
             self.viewLayout.addWidget(self.detail_label)
-            self.viewLayout.addWidget(self.delete_button)  # 添加删除按钮
+            self.viewLayout.addWidget(self.delete_button)
             self.viewLayout.addWidget(self.warning_label)
             
             # 修改按钮文本
             self.yesButton.setText('开始识别')
-            self.yesButton.setIcon(FIF.PLAY.icon())  # 使用icon()方法获取QIcon
-            self.yesButton.setFixedWidth(120)  # 固定按钮宽度
+            self.yesButton.setIcon(FIF.PLAY.icon())
+            self.yesButton.setFixedWidth(120)
             self.cancelButton.setText('取消')
-            self.cancelButton.setIcon(FIF.CANCEL.icon())  # 使用icon()方法获取QIcon
-            self.cancelButton.setFixedWidth(100)  # 固定按钮宽度
+            self.cancelButton.setIcon(FIF.CANCEL.icon())
+            self.cancelButton.setFixedWidth(100)
             
             # 设置最小宽度
             self.widget.setMinimumWidth(450)
         except Exception as layout_err:
             print(f"设置布局时出错: {layout_err}")
-            import traceback
-            traceback.print_exc()
         
         # 5. 连接事件和加载数据
-        print("连接事件...")
         try:
             self.list_widget.itemClicked.connect(self.on_selection_changed)
             self.loadCalibrationSets()
         except Exception as connect_err:
             print(f"连接事件或加载数据时出错: {connect_err}")
-            import traceback
-            traceback.print_exc()
             
         # 为了向后兼容，添加兼容性属性
-        print("设置属性别名...")
         self.selection_detail_label = self.detail_label
         self.warningLabel = self.warning_label
-        
-        print("CalibrationSelectionMessageBox 初始化完成")
+
+    def loadCalibrationSets(self):
+        """加载所有可用的校准数据集"""
+        try:
+            # 确保 calibration 存在
+            if not self.calibration:
+                from health_bar_calibration import HealthBarCalibration
+                self.calibration = HealthBarCalibration()
+            
+            # 获取校准集列表
+            cal_sets = self.calibration.get_calibration_set_names()
+            
+            # 清空列表
+            self.list_widget.clear()
+            
+            # 添加校准集到列表
+            for cal_set in cal_sets:
+                item = QListWidgetItem(cal_set)
+                # 存储校准集名称
+                item.setData(Qt.UserRole, cal_set)
+                self.list_widget.addItem(item)
+            
+            # 如果有校准集，默认选择第一个
+            if cal_sets:
+                self.list_widget.setCurrentRow(0)
+                self.on_selection_changed(self.list_widget.item(0))
+        except Exception as e:
+            print(f"加载校准集列表时出错: {e}")
+            import traceback
+            traceback.print_exc()
     
-    def _safe_get_attr(self, attr_name, default=None):
-        """安全地获取属性值，如果属性不存在则返回默认值"""
-        return getattr(self, attr_name, default)
+    def on_selection_changed(self, item):
+        """当选择改变时更新详细信息"""
+        try:
+            if item:
+                cal_set_name = item.data(Qt.UserRole)
+                self.selected_calibration = cal_set_name
+                
+                # 获取校准集详细信息
+                cal_info = self.calibration.get_calibration_info(cal_set_name)
+                
+                # 使用直接属性访问
+                if not hasattr(self, 'detail_label'):
+                    print("错误: detail_label 属性不存在")
+                    return
+                
+                if cal_info:
+                    health_bars_count = len(cal_info.get('health_bars', []))
+                    creation_time = cal_info.get('creation_time', '未知')
+                    
+                    # 更新详细信息显示
+                    info_text = f"校准集: {cal_set_name}\n包含 {health_bars_count} 个血条\n创建时间: {creation_time}"
+                    
+                    self.detail_label.setText(info_text)
+                    if hasattr(self, 'warning_label') and self.warning_label:
+                        self.warning_label.hide()
+                else:
+                    self.detail_label.setText(f"校准集 {cal_set_name} 无法获取详细信息")
+                    
+                # 启用删除按钮
+                if hasattr(self, 'delete_button') and self.delete_button:
+                    self.delete_button.setEnabled(True)
+            else:
+                if hasattr(self, 'detail_label') and self.detail_label:
+                    self.detail_label.setText("请选择一个校准集")
+                
+                self.selected_calibration = None
+                
+                # 禁用删除按钮
+                if hasattr(self, 'delete_button') and self.delete_button:
+                    self.delete_button.setEnabled(False)
+        except Exception as e:
+            print(f"处理选择变更时出错: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def exec(self):
+        """显示对话框并等待用户操作"""
+        try:
+            # 执行父类的exec方法显示对话框
+            result = super().exec()
+            
+            # 如果用户点击了确定按钮
+            if result:
+                # 获取当前选中的校准集
+                if hasattr(self, 'list_widget') and self.list_widget and self.list_widget.currentItem():
+                    # 从用户数据中获取校准集名称
+                    self.selected_calibration = self.list_widget.currentItem().data(Qt.UserRole)
+                else:
+                    self.selected_calibration = None
+            else:
+                self.selected_calibration = None
+                
+            return result
+        except Exception as e:
+            print(f"CalibrationSelectionMessageBox.exec 方法出错: {e}")
+            import traceback
+            traceback.print_exc()
+            self.selected_calibration = None
+            return False
     
     def delete_selected_calibration(self):
         """删除选中的校准集"""
         if not self.selected_calibration:
             return
             
-        # 保存当前选中的校准集名称，以便在删除后仍能显示
+        # 保存当前选中的校准集名称
         current_cal_name = self.selected_calibration
             
         # 创建确认对话框
@@ -4071,28 +5778,23 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
             try:
                 # 检查校准工具实例
                 if not self.calibration:
-                    print("错误: 校准工具实例不存在")
                     return
                 
                 # 调用校准工具的删除方法
-                print(f"正在删除校准集: {current_cal_name}")
                 success = self.calibration.delete_calibration_set(current_cal_name)
                 
                 if success:
                     # 更新列表
-                    print(f"删除成功，刷新列表")
                     self.loadCalibrationSets()
                     self.selected_calibration = None
                     
-                    # 安全地设置文本
-                    detail_label = self._safe_get_attr('detail_label')
-                    if detail_label:
-                        detail_label.setText("选择一个校准集以查看详细信息")
+                    # 设置文本
+                    if hasattr(self, 'detail_label'):
+                        self.detail_label.setText("选择一个校准集以查看详细信息")
                     
-                    # 安全地禁用删除按钮
-                    delete_button = self._safe_get_attr('delete_button')
-                    if delete_button:
-                        delete_button.setEnabled(False)
+                    # 禁用删除按钮
+                    if hasattr(self, 'delete_button'):
+                        self.delete_button.setEnabled(False)
                     
                     # 显示成功消息
                     InfoBar.success(
@@ -4116,163 +5818,28 @@ class CalibrationSelectionMessageBox(MessageBoxBase):
                         parent=self
                     )
             except Exception as e:
-                print(f"删除校准集时出错: {e}")
-                import traceback
-                traceback.print_exc()
-                
                 # 显示错误消息
                 InfoBar.error(
                     title='删除失败',
-                    content=f'删除 {current_cal_name} 时出错: {str(e)}',
+                    content=f'删除过程中出错: {str(e)}',
                     orient=Qt.Horizontal,
                     isClosable=True,
                     position=InfoBarPosition.TOP,
                     duration=3000,
                     parent=self
                 )
-    
-    def loadCalibrationSets(self):
-        """加载所有可用的校准数据集"""
-        try:
-            # 安全检查：确保 calibration 存在
-            if not self.calibration:
-                from health_bar_calibration import HealthBarCalibration
-                self.calibration = HealthBarCalibration()
-            
-            # 获取校准集列表 - 使用get_calibration_set_names而不是get_calibration_sets
-            cal_sets = self.calibration.get_calibration_set_names()
-            
-            # 安全检查：确保 list_widget 存在
-            list_widget = self._safe_get_attr('list_widget')
-            if not list_widget:
-                print("错误: list_widget 不存在")
-                return
                 
-            # 清空列表
-            list_widget.clear()
-            
-            # 添加校准集到列表
-            for cal_set in cal_sets:
-                item = QListWidgetItem(cal_set)
-                # 存储校准集名称
-                item.setData(Qt.UserRole, cal_set)
-                list_widget.addItem(item)
-            
-            # 如果有校准集，默认选择第一个
-            if cal_sets:
-                list_widget.setCurrentRow(0)
-                self.on_selection_changed(list_widget.item(0))
-        except Exception as e:
-            print(f"加载校准集列表时出错: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def on_selection_changed(self, item):
-        """当选择改变时更新详细信息"""
-        try:
-            print(f"on_selection_changed 被调用，item: {item}")
-            if item:
-                cal_set_name = item.data(Qt.UserRole)
-                self.selected_calibration = cal_set_name
-                print(f"选中校准集: {cal_set_name}")
-                
-                # 获取校准集详细信息
-                cal_info = self.calibration.get_calibration_info(cal_set_name)
-                
-                # 安全检查：确保 detail_label 属性存在
-                detail_label = self._safe_get_attr('detail_label')
-                if not detail_label:
-                    print("错误: detail_label 不存在")
-                    return
-                    
-                warning_label = self._safe_get_attr('warning_label')
-                delete_button = self._safe_get_attr('delete_button')
-                
-                if cal_info:
-                    health_bars_count = len(cal_info.get('health_bars', []))
-                    creation_time = cal_info.get('creation_time', '未知')
-                    
-                    # 更新详细信息显示
-                    info_text = f"校准集: {cal_set_name}\n包含 {health_bars_count} 个血条\n创建时间: {creation_time}"
-                    print(f"更新详细信息: {info_text}")
-                    
-                    detail_label.setText(info_text)
-                    if warning_label:
-                        warning_label.hide()
-                else:
-                    detail_label.setText(f"校准集 {cal_set_name} 无法获取详细信息")
-                    
-                # 启用删除按钮
-                if delete_button:
-                    delete_button.setEnabled(True)
-            else:
-                detail_label = self._safe_get_attr('detail_label')
-                delete_button = self._safe_get_attr('delete_button')
-                
-                if detail_label:
-                    detail_label.setText("请选择一个校准集")
-                self.selected_calibration = None
-                
-                # 禁用删除按钮
-                if delete_button:
-                    delete_button.setEnabled(False)
-                    
-                print("没有选中任何校准集")
-        except Exception as e:
-            print(f"处理选择变更时出错: {e}")
-            import traceback
-            traceback.print_exc()
-    
     def validate(self):
         """验证是否选择了校准集"""
-        try:
-            print(f"validate 被调用，self.selected_calibration: {self.selected_calibration}")
-            if self.selected_calibration:
-                return True
+        if self.selected_calibration:
+            return True
+        
+        # 显示警告
+        if hasattr(self, 'warning_label'):
+            self.warning_label.setText("请选择一个校准数据集")
+            self.warning_label.show()
             
-            # 显示警告
-            warning_label = self._safe_get_attr('warning_label')
-            if warning_label:
-                warning_label.setText("请选择一个校准数据集")
-                warning_label.show()
-                
-            return False
-        except Exception as e:
-            print(f"验证选择时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
-    def exec(self):
-        """显示对话框并等待用户操作"""
-        try:
-            # 显示对话框
-            print(f"正在显示CalibrationSelectionMessageBox对话框")
-            result = super().exec()
-            print(f"对话框结果: {result}, 类型: {type(result)}")
-            
-            # 如果用户点击了确定按钮
-            if result:
-                # 获取当前选中的校准集
-                list_widget = self._safe_get_attr('list_widget')
-                if list_widget and list_widget.currentItem():
-                    self.selected_calibration = list_widget.currentItem().text()
-                    print(f"用户选择了校准集: '{self.selected_calibration}'")
-                else:
-                    print("警告: 未能获取选中的校准集")
-                    self.selected_calibration = None
-            else:
-                print("用户取消了对话框")
-                self.selected_calibration = None
-                
-            print(f"对话框关闭，selected_calibration = '{self.selected_calibration}'")
-            return result
-        except Exception as e:
-            print(f"CalibrationSelectionMessageBox.exec 方法出错: {e}")
-            import traceback
-            traceback.print_exc()
-            self.selected_calibration = None
-            return False
+        return False
 
 class HotkeyEventFilter(QObject):
     def __init__(self, parent, edit, other_edit, which, status_label, health_monitor):
@@ -4794,80 +6361,6 @@ class TextInputMessageBox(MessageBoxBase):
         except Exception as e:
             print(f"设置阴影效果时出错: {e}")
 
-def test_calibration_loading():
-    """测试校准集加载和识别流程"""
-    from health_bar_calibration import HealthBarCalibration
-    import sys
-    
-    # 将输出重定向到文件
-    original_stdout = sys.stdout
-    with open('calibration_test_log.txt', 'w', encoding='utf-8') as f:
-        sys.stdout = f
-        
-        print("\n=== 开始测试校准集加载 ===")
-        
-        # 创建校准对象
-        calibration = HealthBarCalibration()
-        
-        # 检查校准文件是否存在
-        import os
-        calibration_file = "health_bars_calibration.json"
-        if os.path.exists(calibration_file):
-            print(f"校准文件 {calibration_file} 存在")
-            # 获取文件大小
-            file_size = os.path.getsize(calibration_file)
-            print(f"校准文件大小: {file_size} 字节")
-            
-            # 读取文件内容
-            try:
-                import json
-                with open(calibration_file, 'r', encoding='utf-8') as json_file:
-                    data = json.load(json_file)
-                    print(f"校准文件成功加载为JSON")
-                    print(f"校准集数量: {len(data.get('calibration_sets', {}))}")
-                    print(f"最后使用的校准集: {data.get('last_used', '无')}")
-                    
-                    # 打印所有校准集的基本信息
-                    for set_name, set_info in data.get('calibration_sets', {}).items():
-                        print(f"校准集 '{set_name}': {set_info.get('count')} 个血条, 校准时间: {set_info.get('calibration_time')}")
-            except Exception as e:
-                print(f"读取校准文件时出错: {e}")
-        else:
-            print(f"校准文件 {calibration_file} 不存在")
-        
-        # 获取所有校准集
-        cal_sets = calibration.get_calibration_set_names()
-        print(f"\n可用校准集: {cal_sets}")
-        
-        if not cal_sets:
-            print("没有可用的校准集，测试结束")
-            sys.stdout = original_stdout
-            return
-        
-        # 测试加载每一个校准集
-        for test_set in cal_sets:
-            print(f"\n--- 测试加载校准集: {test_set} ---")
-            
-            # 加载校准集
-            success = calibration.load_calibration(test_set)
-            if not success:
-                print(f"加载校准集 '{test_set}' 失败")
-                continue
-            
-            # 检查血条数据
-            health_bars = calibration.health_bars
-            print(f"校准集包含 {len(health_bars)} 个血条")
-            
-            # 打印血条位置
-            for i, bar in enumerate(health_bars):
-                print(f"血条 {i+1}: x1={bar.get('x1')}, y1={bar.get('y1')}, x2={bar.get('x2')}, y2={bar.get('y2')}")
-        
-        print("\n=== 校准集加载测试完成 ===\n")
-    
-    # 恢复标准输出
-    sys.stdout = original_stdout
-    print("校准测试完成，详细日志已保存到 calibration_test_log.txt")
-
 def main():
     """主函数，用于启动应用程序"""
     # 设置高DPI支持 - 在创建应用程序之前进行设置
@@ -4877,8 +6370,16 @@ def main():
     
     app = QApplication(sys.argv)
     
-    # 测试校准集加载
-    test_calibration_loading()
+    # 添加全局异常处理，专门处理InfoBar相关的错误
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, RuntimeError) and "TopInfoBarManager" in str(exc_value):
+            print("捕获到 TopInfoBarManager 错误，已忽略：", exc_value)
+        else:
+            # 对于其他异常，调用默认异常处理
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    
+    # 设置全局异常处理器
+    sys.excepthook = handle_exception
     
     # 设置全局样式
     app.setStyleSheet(GLOBAL_STYLE)

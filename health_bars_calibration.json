@@ -1,39 +1,39 @@
 {
     "calibration_sets": {
-        "5条血条_05201643": {
+        "5条血条_05211022": {
             "count": 5,
-            "calibration_time": "2025-05-20 16:44:59",
+            "calibration_time": "2025-05-21 10:22:47",
             "health_bars": [
                 {
-                    "x1": 875,
-                    "y1": 397,
+                    "x1": 874,
+                    "y1": 398,
                     "x2": 1045,
-                    "y2": 461,
+                    "y2": 464,
                     "recognition_done": true,
                     "name": "英短肥猫",
                     "profession": "汐灵汐"
                 },
                 {
                     "x1": 874,
-                    "y1": 473,
-                    "x2": 1044,
-                    "y2": 539,
+                    "y1": 472,
+                    "x2": 1045,
+                    "y2": 536,
                     "recognition_done": true,
                     "name": "鬼王宗弟子",
-                    "profession": "罡鬼王"
-                },
-                {
-                    "x1": 873,
-                    "y1": 546,
-                    "x2": 1045,
-                    "y2": 611,
-                    "recognition_done": true,
-                    "name": "D合欢派弟子",
-                    "profession": "未知"
+                    "profession": "鬼王"
                 },
                 {
                     "x1": 875,
-                    "y1": 618,
+                    "y1": 546,
+                    "x2": 1045,
+                    "y2": 612,
+                    "recognition_done": true,
+                    "name": "合欢派弟子",
+                    "profession": "未知"
+                },
+                {
+                    "x1": 874,
+                    "y1": 619,
                     "x2": 1045,
                     "y2": 684,
                     "recognition_done": true,
@@ -42,7 +42,7 @@
                 },
                 {
                     "x1": 875,
-                    "y1": 692,
+                    "y1": 691,
                     "x2": 1046,
                     "y2": 759,
                     "recognition_done": true,
@@ -50,89 +50,7 @@
                     "profession": "未知"
                 }
             ]
-        },
-        "5条血条_05202224": {
-            "count": 5,
-            "calibration_time": "2025-05-20 22:24:57",
-            "health_bars": [
-                {
-                    "x1": 1257,
-                    "y1": 751,
-                    "x2": 1359,
-                    "y2": 804,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1273,
-                    "y1": 812,
-                    "x2": 1344,
-                    "y2": 859,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1259,
-                    "y1": 899,
-                    "x2": 1367,
-                    "y2": 961,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1256,
-                    "y1": 992,
-                    "x2": 1375,
-                    "y2": 1058,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1255,
-                    "y1": 1082,
-                    "x2": 1362,
-                    "y2": 1143,
-                    "recognition_done": false
-                }
-            ]
-        },
-        "5条血条_05202325": {
-            "count": 5,
-            "calibration_time": "2025-05-20 23:28:03",
-            "health_bars": [
-                {
-                    "x1": 1433,
-                    "y1": 815,
-                    "x2": 1571,
-                    "y2": 893,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1292,
-                    "y1": 799,
-                    "x2": 1438,
-                    "y2": 851,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1414,
-                    "y1": 832,
-                    "x2": 1509,
-                    "y2": 912,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1452,
-                    "y1": 858,
-                    "x2": 1677,
-                    "y2": 957,
-                    "recognition_done": false
-                },
-                {
-                    "x1": 1417,
-                    "y1": 864,
-                    "x2": 1548,
-                    "y2": 954,
-                    "recognition_done": false
-                }
-            ]
         }
     },
-    "last_used": "5条血条_05202325"
+    "last_used": "5条血条_05211022"
 }
