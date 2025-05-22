@@ -23,7 +23,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QLabel, QFileDialog, QFrame, QGridLayout, QSplitter, QTabWidget, QGroupBox,
                             QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView,
                             QGraphicsDropShadowEffect)
-from skill_cycle_ui import SkillCycleInterface  # 导入技能循环界面
 
 # 导入Fluent组件库
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, PushButton, 
@@ -579,9 +578,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -589,7 +585,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -629,7 +624,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -2123,9 +2117,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -2133,7 +2124,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -2173,7 +2163,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -3311,7 +3300,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QLabel, QFileDialog, QFrame, QGridLayout, QSplitter, QTabWidget, QGroupBox,
                             QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView,
                             QGraphicsDropShadowEffect)
-from skill_cycle_ui import SkillCycleInterface  # 导入技能循环界面
 
 # 导入Fluent组件库
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, PushButton, 
@@ -3867,9 +3855,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -3877,7 +3862,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -3917,7 +3901,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -5411,9 +5394,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -5421,7 +5401,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -5461,7 +5440,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -6619,7 +6597,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QLabel, QFileDialog, QFrame, QGridLayout, QSplitter, QTabWidget, QGroupBox,
                             QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView,
                             QGraphicsDropShadowEffect)
-from skill_cycle_ui import SkillCycleInterface  # 导入技能循环界面
 
 # 导入Fluent组件库
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, PushButton, 
@@ -7175,9 +7152,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -7185,7 +7159,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -7225,7 +7198,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -8719,9 +8691,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -8729,7 +8698,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -8769,7 +8737,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -9907,7 +9874,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QLabel, QFileDialog, QFrame, QGridLayout, QSplitter, QTabWidget, QGroupBox,
                             QInputDialog, QDialog, QListWidget, QListWidgetItem, QAbstractItemView,
                             QGraphicsDropShadowEffect)
-from skill_cycle_ui import SkillCycleInterface  # 导入技能循环界面
 
 # 导入Fluent组件库
 from qfluentwidgets import (FluentWindow, NavigationItemPosition, PushButton, 
@@ -10463,9 +10429,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -10473,7 +10436,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -10513,7 +10475,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -12007,9 +11968,6 @@ class MainWindow(FluentWindow):
         # 新增：语音设置界面实例
         self.voiceSettingsInterface = QWidget()
         self.voiceSettingsInterface.setObjectName("voiceSettingsInterface")
-        # 技能循环界面实例
-        self.skillCycleInterface = QWidget()
-        self.skillCycleInterface.setObjectName("skillCycleInterface")
         
         # 初始化界面
         self.initTeamRecognitionInterface()
@@ -12017,7 +11975,6 @@ class MainWindow(FluentWindow):
         self.initAssistInterface()
         self.initSettingsInterface()
         self.initVoiceSettingsInterface() # 新增：调用语音设置界面初始化
-        self.initSkillCycleInterface()  # 初始化技能循环界面
         
         # 初始化导航
         self.initNavigation()
@@ -12057,7 +12014,6 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.healthMonitorInterface, FIF.HEART, '血条监控')
         self.addSubInterface(self.assistInterface, FIF.IOT, '辅助功能')
         self.addSubInterface(self.voiceSettingsInterface, FIF.MICROPHONE, '语音设置') # 使用 FIF.MICROPHONE 图标
-        self.addSubInterface(self.skillCycleInterface, FIF.GAME, '技能循环')  # 使用 FIF.GAME 图标
         
         # 添加底部界面
         self.addSubInterface(
@@ -14803,18 +14759,6 @@ class MainWindow(FluentWindow):
         
         layout.addWidget(voiceCard)
         layout.addStretch(1)
-
-    def initSkillCycleInterface(self):
-        """初始化技能循环界面"""
-        # 创建布局
-        layout = QVBoxLayout(self.skillCycleInterface)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 创建技能循环界面实例并添加到布局
-        skill_cycle_widget = SkillCycleInterface(self)
-        layout.addWidget(skill_cycle_widget)
-        
-    
 
     def captureScreenIcon(self):
         """截取屏幕区域作为职业图标并保存"""
