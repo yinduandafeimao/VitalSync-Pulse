@@ -33,19 +33,31 @@ class SkillCycleInterface(QWidget):
         self.initUI()
         self._recent_messages = {}  # 用于存储最近显示的消息
         self._is_closing = False  # 标记组件是否正在关闭
+        
+        # 添加定时器初始化
+        self.refresh_timer = QTimer()
+        self.refresh_timer.timeout.connect(self.refresh_skill_list)
+        self.refresh_timer.start(500)  # 设置500毫秒刷新一次，可根据性能调整
 
     def __del__(self):
         """组件销毁时进行清理"""
         self._is_closing = True
+        # 停止定时器
+        if hasattr(self, 'refresh_timer') and self.refresh_timer.isActive():
+            self.refresh_timer.stop()
         # 断开信号连接，避免悬挂引用
         try:
             self.skill_manager.signals.status_signal.disconnect(self.update_skill_status)
+            self.skill_manager.signals.skill_used_signal.disconnect()
         except:
             pass
 
     def closeEvent(self, event):
         """窗口关闭事件"""
         self._is_closing = True
+        # 停止定时器
+        if hasattr(self, 'refresh_timer') and self.refresh_timer.isActive():
+            self.refresh_timer.stop()
         # 确保父类方法被调用
         super().closeEvent(event)
 
@@ -246,6 +258,9 @@ class SkillCycleInterface(QWidget):
         layout.addLayout(controlLayout)
         layout.addWidget(skillListCard, 1)  # 技能列表占据主要空间
         layout.addWidget(settingsCard)
+        
+        # 连接技能使用信号，在技能使用后立即刷新
+        self.skill_manager.signals.skill_used_signal.connect(lambda name: self._schedule_refresh())
     
     def update_skill_status(self, status):
         """更新技能状态标签
@@ -296,6 +311,10 @@ class SkillCycleInterface(QWidget):
 
     def refresh_skill_list(self):
         """刷新技能列表"""
+        # 如果组件正在关闭，不执行刷新
+        if hasattr(self, '_is_closing') and self._is_closing:
+            return
+            
         try:
             # 暂时禁用选中信号，避免频繁刷新
             self.skillListWidget.blockSignals(True)
@@ -306,12 +325,8 @@ class SkillCycleInterface(QWidget):
             if current_item and current_item.data(Qt.UserRole) is not None:
                 current_skill_id = current_item.data(Qt.UserRole)
             
-            # 清空列表
-            self.skillListWidget.clear()
-            
-            # 根据选中的技能组获取技能列表
+            # 获取当前的技能列表
             skills_to_display = []
-            
             try:
                 # 获取当前选中的技能组
                 current_group = None
@@ -331,32 +346,82 @@ class SkillCycleInterface(QWidget):
                 # 如果出错，显示所有技能
                 skills_to_display = self.skill_manager.skills
             
-            # 添加技能到列表
-            for skill in skills_to_display:
-                try:
-                    # 检查技能是否有效
-                    if not hasattr(skill, 'name') or not skill.name:
-                        continue
-                    
-                    # 创建新的列表项
-                    skill_name = getattr(skill, 'name', '未知技能')
-                    item = QListWidgetItem(skill_name)
-                    item.setData(Qt.UserRole, skill_name)
-                    self.skillListWidget.addItem(item)
-                    
-                    # 更新项的状态（优先级、冷却时间等）
-                    self._update_skill_item(item, skill)
-                except Exception as e:
-                    print(f"添加技能 {getattr(skill, 'name', '未知')} 到列表时出错: {str(e)}")
-                    continue
-            
-            # 如果有之前选中的项，尝试重新选中
-            if current_skill_id:
+            # 检查是否需要重建列表
+            rebuild_list = False
+            if self.skillListWidget.count() != len(skills_to_display):
+                rebuild_list = True
+            else:
+                # 检查列表项中的技能是否与当前需要显示的技能匹配
                 for i in range(self.skillListWidget.count()):
                     item = self.skillListWidget.item(i)
-                    if item and item.data(Qt.UserRole) == current_skill_id:
-                        self.skillListWidget.setCurrentItem(item)
+                    if not item:
+                        rebuild_list = True
                         break
+                    
+                    skill_name = item.data(Qt.UserRole)
+                    found = False
+                    for skill in skills_to_display:
+                        if hasattr(skill, 'name') and skill.name == skill_name:
+                            found = True
+                            break
+                    
+                    if not found:
+                        rebuild_list = True
+                        break
+            
+            # 如果需要重建列表
+            if rebuild_list:
+                # 清空列表
+                self.skillListWidget.clear()
+                
+                # 添加技能到列表
+                for skill in skills_to_display:
+                    try:
+                        # 检查技能是否有效
+                        if not hasattr(skill, 'name') or not skill.name:
+                            continue
+                        
+                        # 创建新的列表项
+                        skill_name = getattr(skill, 'name', '未知技能')
+                        item = QListWidgetItem(skill_name)
+                        item.setData(Qt.UserRole, skill_name)
+                        self.skillListWidget.addItem(item)
+                        
+                        # 更新项的状态（优先级、冷却时间等）
+                        self._update_skill_item(item, skill)
+                    except Exception as e:
+                        print(f"添加技能 {getattr(skill, 'name', '未知')} 到列表时出错: {str(e)}")
+                        continue
+                
+                # 如果有之前选中的项，尝试重新选中
+                if current_skill_id:
+                    for i in range(self.skillListWidget.count()):
+                        item = self.skillListWidget.item(i)
+                        if item and item.data(Qt.UserRole) == current_skill_id:
+                            self.skillListWidget.setCurrentItem(item)
+                            break
+            else:
+                # 只更新现有项的状态
+                for i in range(self.skillListWidget.count()):
+                    item = self.skillListWidget.item(i)
+                    if not item:
+                        continue
+                    
+                    # 获取项目的技能名称
+                    skill_name = item.data(Qt.UserRole)
+                    if not skill_name:
+                        continue
+                        
+                    # 查找对应的技能对象
+                    skill = None
+                    for s in skills_to_display:
+                        if hasattr(s, 'name') and s.name == skill_name:
+                            skill = s
+                            break
+                            
+                    # 更新技能项
+                    if skill:
+                        self._update_skill_item(item, skill)
             
             # 恢复信号
             self.skillListWidget.blockSignals(False)
@@ -374,7 +439,7 @@ class SkillCycleInterface(QWidget):
             
         try:
             # 使用弱引用方式设置定时刷新，避免对象被销毁后仍然执行
-            QTimer.singleShot(1000, lambda: self.refresh_skill_list() if hasattr(self, 'skillListWidget') and not self._is_closing else None)
+            QTimer.singleShot(100, lambda: self.refresh_skill_list() if hasattr(self, 'skillListWidget') and not self._is_closing else None)
         except RuntimeError:
             # 捕获可能的运行时错误，例如对象已被删除
             print("定时刷新出错，组件可能已被销毁")
