@@ -408,6 +408,195 @@ class ConfigManager:
             print(f"保存技能组配置出错: {str(e)}")
             return False
     
+    def get_all_skill_groups(self) -> List[SkillGroup]:
+        """获取所有技能组
+        
+        返回:
+            List[SkillGroup]: 所有技能组对象的列表
+        """
+        try:
+            result = []
+            # 确保默认组存在
+            default_group = self.get_skill_group("default")
+            if default_group:
+                result.append(default_group)
+            
+            # 从system_config中获取技能组列表
+            group_infos = self.system_config.skill_groups
+            
+            # 遍历所有技能组文件
+            groups_dir = os.path.join(self.config_dir, "skill_groups")
+            for filename in os.listdir(groups_dir):
+                if filename.endswith('.json'):
+                    group_id = filename[:-5]  # 移除.json扩展名
+                    
+                    # 跳过已处理的默认组
+                    if group_id == "default" and default_group in result:
+                        continue
+                    
+                    group = self.get_skill_group(group_id)
+                    if group:
+                        result.append(group)
+            
+            # 按名称排序
+            result.sort(key=lambda g: g.name)
+            return result
+        except Exception as e:
+            print(f"获取所有技能组时出错: {str(e)}")
+            return []
+    
+    def add_skill_group(self, group: SkillGroup) -> bool:
+        """添加技能组
+        
+        参数:
+            group (SkillGroup): 要添加的技能组
+            
+        返回:
+            bool: 是否成功
+        """
+        try:
+            # 检查是否已存在
+            existing_group = self.get_skill_group(group.id)
+            if existing_group:
+                print(f"技能组 {group.id} 已存在，请使用update_skill_group更新")
+                return False
+            
+            # 保存技能组文件
+            success = self.save_skill_group(group)
+            if not success:
+                return False
+            
+            # 更新system_config.skill_groups
+            # 先检查是否已存在
+            existing_idx = None
+            for i, group_info in enumerate(self.system_config.skill_groups):
+                if group_info.get("id") == group.id:
+                    existing_idx = i
+                    break
+            
+            group_info = {
+                "id": group.id,
+                "name": group.name,
+                "description": group.description
+            }
+            
+            if existing_idx is not None:
+                # 更新
+                self.system_config.skill_groups[existing_idx] = group_info
+            else:
+                # 添加
+                self.system_config.skill_groups.append(group_info)
+            
+            # 保存系统配置
+            return self.save_system_config()
+        except Exception as e:
+            print(f"添加技能组时出错: {str(e)}")
+            return False
+    
+    def update_skill_group(self, group: SkillGroup) -> bool:
+        """更新技能组
+        
+        参数:
+            group (SkillGroup): 要更新的技能组
+            
+        返回:
+            bool: 是否成功
+        """
+        try:
+            # 确保技能组存在
+            existing_group = self.get_skill_group(group.id)
+            if not existing_group:
+                print(f"技能组 {group.id} 不存在，请先添加")
+                return False
+            
+            # 更新技能组文件
+            group.updated_at = datetime.now().isoformat()
+            success = self.save_skill_group(group)
+            if not success:
+                return False
+            
+            # 更新system_config.skill_groups
+            for i, group_info in enumerate(self.system_config.skill_groups):
+                if group_info.get("id") == group.id:
+                    self.system_config.skill_groups[i] = {
+                        "id": group.id,
+                        "name": group.name,
+                        "description": group.description
+                    }
+                    break
+            else:
+                # 如果找不到，则添加
+                self.system_config.skill_groups.append({
+                    "id": group.id,
+                    "name": group.name,
+                    "description": group.description
+                })
+            
+            # 保存系统配置
+            return self.save_system_config()
+        except Exception as e:
+            print(f"更新技能组时出错: {str(e)}")
+            return False
+    
+    def remove_skill_group(self, group_id: str) -> bool:
+        """删除技能组
+        
+        参数:
+            group_id (str): 技能组ID
+            
+        返回:
+            bool: 是否成功
+        """
+        try:
+            # 不允许删除默认组
+            if group_id == "default":
+                print("默认技能组不能被删除")
+                return False
+            
+            # 确保技能组存在
+            group = self.get_skill_group(group_id)
+            if not group:
+                print(f"技能组 {group_id} 不存在")
+                return False
+            
+            # 获取组中的所有技能
+            skill_ids = group.skill_ids.copy() if hasattr(group, "skill_ids") else []
+            
+            # 删除技能组文件
+            group_file = os.path.join(self.config_dir, "skill_groups", f"{group_id}.json")
+            if os.path.exists(group_file):
+                os.remove(group_file)
+            
+            # 从system_config.skill_groups中删除
+            self.system_config.skill_groups = [
+                g for g in self.system_config.skill_groups if g.get("id") != group_id
+            ]
+            
+            # 将技能移至默认组
+            default_group = self.get_skill_group("default")
+            if default_group and skill_ids:
+                for skill_id in skill_ids:
+                    # 检查技能是否存在
+                    data_skill = self.skills_db.get_skill(skill_id)
+                    if data_skill:
+                        # 更新技能所属组
+                        data_skill.group_id = "default"
+                        self.skills_db.add_skill(data_skill)
+                        
+                        # 将技能ID添加到默认组
+                        if skill_id not in default_group.skill_ids:
+                            default_group.skill_ids.append(skill_id)
+                
+                # 保存默认组
+                self.save_skill_group(default_group)
+                
+            # 保存技能数据库和系统配置
+            self.save_skills_db()
+            return self.save_system_config()
+        except Exception as e:
+            print(f"删除技能组时出错: {str(e)}")
+            return False
+    
     def get_condition(self, condition_id: str) -> Optional[Condition]:
         """获取单个条件配置"""
         try:

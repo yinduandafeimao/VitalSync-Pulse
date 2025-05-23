@@ -943,9 +943,11 @@ class NewSkillCycleManager(SkillCycleManager):
         result = []
         for skill_id in group.skill_ids:
             data_skill = self.config_manager.skills_db.get_skill(skill_id)
-            if data_skill and data_skill.enabled:
-                skill = self._convert_data_skill_to_runtime(data_skill)
-                result.append(skill)
+            if data_skill:
+                if data_skill.enabled:
+                    skill = self._convert_data_skill_to_runtime(data_skill)
+                    if skill:
+                        result.append(skill)
         
         return result
     
